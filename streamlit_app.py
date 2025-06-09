@@ -2,12 +2,25 @@ import streamlit as st
 import pandas as pd
 import math
 from pathlib import Path
+import numpy as np
+from statsmodels.tsa.stattools import adfuller, kpss
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
-# Set the page title and favicon that appear in the browser's tab bar
+# Impor model yang relevan
+from statsmodels.tsa.arima.model import ARIMA
+from arch import arch_model
+
+# --- Konfigurasi Halaman (Hanya dipanggil sekali di awal) ---
 st.set_page_config(
-    page_title="Prediksi Harga Saham Rokok - Mixture Autoregressive",
-    page_icon="📈",  # Stock chart emoji as icon
+    page_title='Prediksi ARIMA-NGARCH Volatilitas Mata Uang 📈💰', # Tambah emoji di sini
+    page_icon='📈', # Ini adalah icon untuk tab browser
+    layout="wide"
 )
+
 
 # -----------------------------------------------------------------------------
 # Declare some useful functions.
