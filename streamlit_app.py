@@ -10,17 +10,45 @@ import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-# Impor model yang relevan
-from statsmodels.tsa.arima.model import ARIMA
-from arch import arch_model
-
 # --- Konfigurasi Halaman (Hanya dipanggil sekali di awal) ---
 st.set_page_config(
     page_title='Prediksi Harga Saham - Mixture Autoregressive', # Tambah emoji di sini
     page_icon='📈', # Ini adalah icon untuk tab browser
     layout="wide"
 )
-
+        color: #374151; /* neutral gray-700 */
+    }
+    h1 {
+        font-weight: 700;
+        font-size: 3rem;
+        margin-bottom: 0.25rem;
+        color: #111827; /* neutral gray-900 */
+    }
+    h2 {
+        font-weight: 500;
+        font-size: 1.25rem;
+        margin-top: 0;
+        margin-bottom: 2rem;
+        color: #6b7280; /* neutral gray-500 */
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+with st.container():
+    st.markdown(
+        """
+        <div class="main-container">
+            <h1>Prediksi Harga Saham Rokok</h1>
+            <h2>Model Mixture Autoregressive dan ARIMA</h2>
+            <p>
+                Penelitian ini bertujuan untuk melakukan prediksi harga saham industri rokok menggunakan pendekatan model statistik canggih
+                yaitu Mixture Autoregressive dan ARIMA. Aplikasi ini memberikan visualisasi dan analisis data harga saham secara interaktif.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 # -----------------------------------------------------------------------------
 # Declare some useful functions.
 
