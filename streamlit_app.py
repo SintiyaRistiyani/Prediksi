@@ -10,12 +10,24 @@ import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-# --- Konfigurasi Halaman (Hanya dipanggil sekali di awal) ---
+import streamlit as st
+
+# Set the page title and favicon that appear in the browser's tab bar
 st.set_page_config(
-    page_title='Prediksi Harga Saham - Mixture Autoregressive', # Tambah emoji di sini
-    page_icon='📈', # Ini adalah icon untuk tab browser
-    layout="wide"
+    page_title="Prediksi Harga Saham Rokok - Mixture Autoregressive & ARIMA",
+    page_icon="📈",  # Stock chart emoji as icon
 )
+
+# Main UI - centered container approach
+st.markdown(
+    """
+    <style>
+    /* Center content and limit width */
+    .main-container {
+        max-width: 900px;
+        margin: 3rem auto 3rem auto;
+        padding: 0 1rem;
+        font-family: 'Inter', sans-serif;
         color: #374151; /* neutral gray-700 */
     }
     h1 {
@@ -35,6 +47,7 @@ st.set_page_config(
     """,
     unsafe_allow_html=True,
 )
+
 with st.container():
     st.markdown(
         """
