@@ -3,10 +3,10 @@ import pandas as pd
 import math
 from pathlib import Path
 
-# Set the title and favicon that appear in the Browser's tab bar.
+# Set the page title and favicon that appear in the browser's tab bar
 st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
+    page_title="Prediksi Harga Saham Rokok - Mixture Autoregressive",
+    page_icon="📈",  # Stock chart emoji as icon
 )
 
 # -----------------------------------------------------------------------------
