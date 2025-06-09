@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 # Set page config with a light clean style
 st.set_page_config(
-    page_title="Prediksi Harga Saham Produksi Rokok - Mixture Autoregressive",
+    page_title="Prediksi Harga Saham - Mixture Autoregressive",
     page_icon="📈",
     layout="wide"
 )
