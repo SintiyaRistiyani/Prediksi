@@ -16,11 +16,10 @@ from arch import arch_model
 
 # --- Konfigurasi Halaman (Hanya dipanggil sekali di awal) ---
 st.set_page_config(
-    page_title='Prediksi ARIMA-NGARCH Volatilitas Mata Uang 📈💰', # Tambah emoji di sini
+    page_title='Prediksi Harga Saham - Mixture Autoregressive', # Tambah emoji di sini
     page_icon='📈', # Ini adalah icon untuk tab browser
     layout="wide"
 )
-
 
 # -----------------------------------------------------------------------------
 # Declare some useful functions.
