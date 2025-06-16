@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import gennorm
 
+
 st.set_page_config(page_title="Prediksi Harga Saham", layout="wide")
 st.title("📈 Dashboard Prediksi Harga Saham")
 st.markdown("Prediksi menggunakan model **Mixture Autoregressive (MAR)** dengan distribusi **GED** dan estimasi parameter **EM**.")
