@@ -1,8 +1,5 @@
-streamlit
-pandas
-matplotlib
-Path
-numpy
-streamlit
-Image
-base64
+streamlit==1.45.1
+pandas==2.3.0
+matplotlib==3.8.4
+numpy==1.26.4
+
