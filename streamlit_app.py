@@ -3,84 +3,9 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import gennorm
-import warnings
-warnings.filterwarnings("ignore")
-
-# -------------------------- Fungsi MAR-GED-EM ----------------------------
-
-def preprocess(df, col):
-    df = df.dropna(subset=[col])
-    series = df[col].copy()
-    series = series.astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
-    series.index = pd.to_datetime(df.index)
-    return series
-
-def fit_mar_em_ged(series, n_components=2, ar_order=2, max_iter=100, tol=1e-4):
-    X = np.column_stack([series.shift(i) for i in range(1, ar_order + 1)])
-    X = X[ar_order:]
-    y = series[ar_order:]
-
-    X = np.hstack([np.ones((X.shape[0], 1)), X])
-    y = y.values
-
-    beta_init = np.linalg.pinv(X) @ y
-    residuals = y - X @ beta_init
-
-    pis = np.ones(n_components) / n_components
-    coefs = [beta_init.copy() for _ in range(n_components)]
-    scales = [np.std(residuals)] * n_components
-    betas = [1.5] * n_components
-    weights = np.ones((len(y), n_components)) / n_components
-
-    log_likelihoods = []
-
-    for iteration in range(max_iter):
-        for k in range(n_components):
-            mu_k = X @ coefs[k]
-            pdf_k = gennorm.pdf(y, beta=betas[k], loc=mu_k, scale=scales[k])
-            weights[:, k] = pis[k] * pdf_k
-
-        weights /= weights.sum(axis=1, keepdims=True)
-        pis = weights.mean(axis=0)
-
-        for k in range(n_components):
-            W = np.diag(weights[:, k])
-            XtW = X.T @ W
-            beta_k = np.linalg.pinv(XtW @ X) @ XtW @ y
-            coefs[k] = beta_k
-            residuals = y - X @ coefs[k]
-            beta_est, _, scale_est = gennorm.fit(residuals)
-            betas[k], scales[k] = beta_est, scale_est
-
-        ll = np.sum(np.log(np.sum([
-            pis[k] * gennorm.pdf(y, beta=betas[k], loc=X @ coefs[k], scale=scales[k])
-            for k in range(n_components)
-        ], axis=0)))
-        log_likelihoods.append(ll)
-
-        if iteration > 1 and np.abs(log_likelihoods[-1] - log_likelihoods[-2]) < tol:
-            break
-
-    return pis, coefs, betas, scales, ar_order
-
-def predict_mar_ged(pis, coefs, betas, scales, series, steps=10):
-    ar_order = len(coefs[0]) - 1
-    history = list(series[-ar_order:])
-    preds = []
-
-    for _ in range(steps):
-        X_t = np.array([1.0] + history[-ar_order:][::-1])
-        pred_k = np.array([X_t @ coefs[k] for k in range(len(coefs))])
-        final_pred = np.sum(pis * pred_k)
-        preds.append(final_pred)
-        history.append(final_pred)
-
-    return np.array(preds)
-
-# -------------------------- Streamlit UI ----------------------------
 
 st.set_page_config(page_title="Prediksi Harga Saham", layout="wide")
-st.title("📈 Dashboard Prediksi Harga Saham Rokok")
+st.title("📈 Dashboard Prediksi Harga Saham")
 st.markdown("Prediksi menggunakan model **Mixture Autoregressive (MAR)** dengan distribusi **GED** dan estimasi parameter EM.")
 
 uploaded_file = st.file_uploader("Unggah file CSV harga saham", type=["csv"])
@@ -122,7 +47,7 @@ if uploaded_file:
                 mime='text/csv',
             )
 else:
-    st.info("Silakan unggah file CSV dengan format: `Date; GUDANG GARAM; SAMPOERNA; WISMILAK` ...")
+    st.info("Silakan unggah file CSV  yang harus memiliki kolom : Date, Harga Saham ")
 
 st.markdown("---")
 st.caption("© 2025 Prediksi Saham Rokok | Dibuat dengan Streamlit")
