@@ -2,5 +2,8 @@ streamlit
 pandas
 matplotlib.pyplot
 matplotlib
+Path
 numpy
-path
+streamlit
+Image
+base64
