@@ -6,7 +6,7 @@ from scipy.stats import gennorm
 
 st.set_page_config(page_title="Prediksi Harga Saham", layout="wide")
 st.title("📈 Dashboard Prediksi Harga Saham")
-st.markdown("Prediksi menggunakan model **Mixture Autoregressive (MAR)** dengan distribusi **GED** dan estimasi parameter EM.")
+st.markdown("Prediksi menggunakan model **Mixture Autoregressive (MAR)** dengan distribusi **GED** dan estimasi parameter **EM**.")
 
 uploaded_file = st.file_uploader("Unggah file CSV harga saham", type=["csv"])
 
@@ -50,4 +50,4 @@ else:
     st.info("Silakan unggah file CSV  yang harus memiliki kolom : Date, Harga Saham ")
 
 st.markdown("---")
-st.caption("© 2025 Prediksi Saham Rokok | Dibuat dengan Streamlit")
+st.caption("© 2025 Prediksi Harga Saham | Dibuat dengan Streamlit")
