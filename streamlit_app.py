@@ -5,20 +5,22 @@ import numpy as np
 
 st.set_page_config(page_title="Prediksi Harga Saham", layout="wide")
 
-st.title("📈 Dashboard Prediksi Harga Saham Rokok")
+st.title("📈 Dashboard Prediksi Harga Saham")
 st.markdown("Prediksi menggunakan model **Mixture Autoregressive (MAR)** dengan distribusi **GED**.")
 
 uploaded_file = st.file_uploader("Unggah file CSV harga saham", type="csv")
 
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
-    df['Date'] = pd.to_datetime(df['Date'])
+
+if uploaded_file:
+    df = pd.read_csv(uploaded_file, delimiter=';')
+    df['Date'] = pd.to_datetime(df['Date'], dayfirst=True)
     df.set_index('Date', inplace=True)
-    
+
     saham_list = df.columns.tolist()
     saham = st.selectbox("Pilih perusahaan", saham_list)
-    
-    st.line_chart(df[saham], use_container_width=True)
+
+    if st.button("🔍 Analisis"):
+        series = preprocess(df, saham)
 
     st.subheader(f"📊 Statistik {saham}")
     st.write(df[saham].describe())
