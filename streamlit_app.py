@@ -130,8 +130,27 @@ if uploaded_file:
     saham_list = df.columns.tolist()
     saham = st.selectbox("Pilih perusahaan", saham_list)
 
-    series = preprocess(df, saham)
-    st.line_chart(series, use_container_width=True)
+series = preprocess(df, saham)
+
+fig = go.Figure()
+fig.add_trace(go.Scatter(
+    x=series.index,
+    y=series.values,
+    mode='lines',
+    name=saham,
+    line=dict(color='royalblue', width=2)
+))
+
+fig.update_layout(
+    title=f'Harga Saham {saham}',
+    xaxis_title='Tanggal',
+    yaxis_title='Harga',
+    template='plotly_white',
+    height=400,
+    margin=dict(t=40, l=20, r=20, b=40)
+)
+
+st.plotly_chart(fig, use_container_width=True)
 
     st.subheader(f"📊 Statistik Deskriptif {saham}")
     st.write(series.describe())
