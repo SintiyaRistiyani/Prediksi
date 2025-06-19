@@ -8,7 +8,7 @@ from sklearn.metrics import mean_squared_error
 # ----------------- Konfigurasi Dashboard -----------------
 st.set_page_config(page_title="Prediksi Harga Saham", layout="wide")
 st.title("📈 Dashboard Prediksi Harga Saham")
-st.markdown("Prediksi menggunakan model **Mixture Autoregressive (MAR)** dengan distribusi **GED** dan estimasi parameter **EM**.")
+st.markdown("Prediksi harga saham menggunakan model **Mixture Autoregressive (MAR)** dengan distribusi **GED** dan estimasi parameter **EM**.")
 
 # ----------------- Menu Navigasi Sidebar -----------------
 st.sidebar.markdown("#### MENU NAVIGASI 🧭")
