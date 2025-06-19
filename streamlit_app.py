@@ -132,25 +132,15 @@ if uploaded_file:
 
 series = preprocess(df, saham)
 
-fig = go.Figure()
-fig.add_trace(go.Scatter(
-    x=series.index,
-    y=series.values,
-    mode='lines',
-    name=saham,
-    line=dict(color='royalblue', width=2)
-))
+fig, ax = plt.subplots(figsize=(10, 4))
+ax.plot(series.index, series.values, label=saham, color='blue')
+ax.set_title(f"Harga Saham {saham} dari Waktu ke Waktu")
+ax.set_xlabel("Tanggal")
+ax.set_ylabel("Harga")
+ax.grid(True)
+ax.legend()
 
-fig.update_layout(
-    title=f'Harga Saham {saham}',
-    xaxis_title='Tanggal',
-    yaxis_title='Harga',
-    template='plotly_white',
-    height=400,
-    margin=dict(t=40, l=20, r=20, b=40)
-)
-
-st.plotly_chart(fig, use_container_width=True)
+st.pyplot(fig)
 
     st.subheader(f"📊 Statistik Deskriptif {saham}")
     st.write(series.describe())
