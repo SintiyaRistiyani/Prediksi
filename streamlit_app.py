@@ -130,16 +130,25 @@ if uploaded_file:
     saham_list = df.columns.tolist()
     saham = st.selectbox("Pilih perusahaan", saham_list)
 
+import matplotlib.pyplot as plt
+
+# Ambil hanya kolom saham yang dipilih
 series = preprocess(df, saham)
 
-fig, ax = plt.subplots(figsize=(10, 4))
-ax.plot(series.index, series.values, label=saham, color='blue')
+# Plot dengan ukuran lebih lebar (lebar=14 inch, tinggi=4 inch)
+fig, ax = plt.subplots(figsize=(14, 4))
+
+ax.plot(series.index, series.values, label=saham, color='blue', linewidth=1.5)
 ax.set_title(f"Harga Saham {saham} dari Waktu ke Waktu")
 ax.set_xlabel("Tanggal")
 ax.set_ylabel("Harga")
 ax.grid(True)
 ax.legend()
 
+# Putar label tanggal agar tidak tumpuk
+plt.xticks(rotation=45)
+
+# Tampilkan ke Streamlit
 st.pyplot(fig)
 
     st.subheader(f"📊 Statistik Deskriptif {saham}")
