@@ -238,108 +238,120 @@ elif menu == "Model":
                 st.error(f"❌ Gagal melatih model ARIMA: {e}")
 
     # --------------------- MAR ---------------------
-    elif model_type == "Mixture Autoregressive (MAR)":
-        st.markdown("### ⚙️ Pilih Metode Pelatihan Model MAR")
+elif model_type == "Mixture Autoregressive (MAR)":
+    st.markdown("### ⚙️ Pilih Metode Pelatihan Model MAR")
 
-        mar_method = st.radio("Pilih metode pelatihan:", [
-            "Hitung Otomatis (EM Algorithm)", 
-            "Masukkan Parameter Manual"
-        ])
+    mar_method = st.radio("Pilih metode pelatihan:", [
+        "Hitung Otomatis (EM Algorithm)", 
+        "Masukkan Parameter Manual"
+    ])
 
-        if mar_method == "Hitung Otomatis (EM Algorithm)":
-            k = st.number_input("Jumlah Komponen (k)", min_value=1, value=2, step=1)
-            p = st.number_input("Order AR (p)", min_value=1, value=1, step=1)
+    if mar_method == "Hitung Otomatis (EM Algorithm)":
+        k = st.number_input("Jumlah Komponen (k)", min_value=1, value=2, step=1)
+        p = st.number_input("Order AR (p)", min_value=1, value=1, step=1)
 
-            if st.button("🚀 Jalankan EM untuk MAR"):
-                try:
-                    from numpy.linalg import inv
-                    from scipy.stats import norm
-                    import numpy as np
+        if st.button("🚀 Jalankan EM untuk MAR (GED)"):
+            try:
+                from numpy.linalg import inv
+                from scipy.special import gamma
+                import numpy as np
 
-                    log_ret = st.session_state['log_return'].dropna().values
-                    X = np.column_stack([log_ret[i:-(p - i)] for i in range(p)])
-                    Y = log_ret[p:]
-                    n = len(Y)
+                def ged_pdf(x, mu, sigma, nu):
+                    beta = sigma * (gamma(1/nu) / gamma(3/nu))**0.5
+                    coeff = nu / (2 * beta * gamma(1/nu))
+                    z = np.abs((x - mu) / beta)
+                    return coeff * np.exp(-z**nu)
 
-                    # Inisialisasi
-                    np.random.seed(42)
-                    pis = np.full(k, 1/k)
-                    betas = [np.random.randn(p) for _ in range(k)]
-                    sigmas = np.full(k, np.std(Y))
+                log_ret = st.session_state['log_return'].dropna().values
+                X = np.column_stack([log_ret[i:-(p - i)] for i in range(p)])
+                Y = log_ret[p:]
+                n = len(Y)
 
-                    max_iter = 100
-                    for _ in range(max_iter):
-                        gamma = np.zeros((n, k))
-                        for j in range(k):
-                            mu = X @ betas[j]
-                            gamma[:, j] = pis[j] * norm.pdf(Y, mu, sigmas[j])
-                        gamma /= gamma.sum(axis=1, keepdims=True)
+                np.random.seed(42)
+                pis = np.full(k, 1/k)
+                betas = [np.random.randn(p) for _ in range(k)]
+                sigmas = np.full(k, np.std(Y))
+                nus = np.full(k, 2.0)  # GED shape parameter (ν)
 
-                        pis = gamma.mean(axis=0)
-                        for j in range(k):
-                            W = np.diag(gamma[:, j])
-                            XW = X.T @ W
-                            betas[j] = inv(XW @ X) @ XW @ Y
-                            residual = Y - X @ betas[j]
-                            sigmas[j] = np.sqrt((gamma[:, j] * residual**2).sum() / gamma[:, j].sum())
-
-                    st.session_state['mar_model'] = {
-                        'pis': pis, 'betas': betas, 'sigmas': sigmas,
-                        'k': k, 'p': p
-                    }
-
-                    st.success("✅ MAR berhasil dilatih dengan EM!")
+                max_iter = 100
+                for _ in range(max_iter):
+                    gamma_mat = np.zeros((n, k))
                     for j in range(k):
-                        st.markdown(f"#### Komponen {j+1}")
-                        st.write(f"Koefisien AR: {betas[j]}")
-                        st.write(f"σ²: {sigmas[j]**2:.6f}")
-                        st.write(f"Proporsi: {pis[j]:.4f}")
+                        mu = X @ betas[j]
+                        gamma_mat[:, j] = pis[j] * ged_pdf(Y, mu, sigmas[j], nus[j])
+                    gamma_mat /= gamma_mat.sum(axis=1, keepdims=True)
 
-                except Exception as e:
-                    st.error(f"Gagal saat EM training: {e}")
-
-        elif mar_method == "Masukkan Parameter Manual":
-            st.markdown("#### ✍️ Masukkan Parameter MAR secara Manual")
-            k = st.number_input("Jumlah Komponen (k)", min_value=1, value=2, step=1)
-            p = st.number_input("Order AR (p)", min_value=1, value=1, step=1)
-
-            betas = []
-            sigmas = []
-            pis = []
-
-            for i in range(k):
-                st.markdown(f"##### Komponen {i+1}")
-                beta_input = st.text_input(f"Koefisien AR (pisahkan dengan koma) Komponen {i+1}", value="0.5")
-                sigma_input = st.number_input(f"Sigma Komponen {i+1}", value=0.1)
-                pi_input = st.number_input(f"Proporsi Komponen {i+1}", min_value=0.0, max_value=1.0, value=1/k)
-
-                beta_array = np.fromstring(beta_input, sep=',')
-                if len(beta_array) != p:
-                    st.error(f"Jumlah koefisien AR untuk Komponen {i+1} harus sama dengan order p ({p})")
-                    st.stop()
-
-                betas.append(beta_array)
-                sigmas.append(sigma_input)
-                pis.append(pi_input)
-
-            if st.button("🚀 Simpan Parameter MAR Manual"):
-                pis = np.array(pis)
-                pis /= pis.sum()
+                    pis = gamma_mat.mean(axis=0)
+                    for j in range(k):
+                        W = np.diag(gamma_mat[:, j])
+                        XW = X.T @ W
+                        betas[j] = inv(XW @ X) @ XW @ Y
+                        residual = Y - X @ betas[j]
+                        sigmas[j] = np.sqrt((gamma_mat[:, j] * residual**2).sum() / gamma_mat[:, j].sum())
 
                 st.session_state['mar_model'] = {
-                    'pis': pis,
-                    'betas': betas,
-                    'sigmas': sigmas,
-                    'k': k,
-                    'p': p
+                    'pis': pis, 'betas': betas, 'sigmas': sigmas, 'nus': nus,
+                    'k': k, 'p': p
                 }
 
-                st.success("✅ Parameter MAR berhasil disimpan!")
+                st.success("✅ MAR (GED) berhasil dilatih dengan EM!")
                 for j in range(k):
                     st.markdown(f"#### Komponen {j+1}")
                     st.write(f"Koefisien AR: {betas[j]}")
                     st.write(f"σ²: {sigmas[j]**2:.6f}")
                     st.write(f"Proporsi: {pis[j]:.4f}")
+                    st.write(f"ν (shape): {nus[j]:.2f}")
+
+            except Exception as e:
+                st.error(f"Gagal saat EM training: {e}")
+
+    elif mar_method == "Masukkan Parameter Manual":
+        st.markdown("#### ✍️ Masukkan Parameter MAR secara Manual")
+        k = st.number_input("Jumlah Komponen (k)", min_value=1, value=2, step=1)
+        p = st.number_input("Order AR (p)", min_value=1, value=1, step=1)
+
+        betas = []
+        sigmas = []
+        pis = []
+        nus = []
+
+        for i in range(k):
+            st.markdown(f"##### Komponen {i+1}")
+            beta_input = st.text_input(f"Koefisien AR (pisahkan dengan koma) Komponen {i+1}", value="0.5")
+            sigma_input = st.number_input(f"Sigma Komponen {i+1}", value=0.1)
+            pi_input = st.number_input(f"Proporsi Komponen {i+1}", min_value=0.0, max_value=1.0, value=1/k)
+            nu_input = st.number_input(f"GED Shape ν Komponen {i+1}", min_value=1.0, value=2.0)
+
+            beta_array = np.fromstring(beta_input, sep=',')
+            if len(beta_array) != p:
+                st.error(f"Jumlah koefisien AR untuk Komponen {i+1} harus sama dengan order p ({p})")
+                st.stop()
+
+            betas.append(beta_array)
+            sigmas.append(sigma_input)
+            pis.append(pi_input)
+            nus.append(nu_input)
+
+        if st.button("🚀 Simpan Parameter MAR Manual"):
+            pis = np.array(pis)
+            pis /= pis.sum()
+
+            st.session_state['mar_model'] = {
+                'pis': pis,
+                'betas': betas,
+                'sigmas': sigmas,
+                'nus': nus,
+                'k': k,
+                'p': p
+            }
+
+            st.success("✅ Parameter MAR berhasil disimpan!")
+            for j in range(k):
+                st.markdown(f"#### Komponen {j+1}")
+                st.write(f"Koefisien AR: {betas[j]}")
+                st.write(f"σ²: {sigmas[j]**2:.6f}")
+                st.write(f"Proporsi: {pis[j]:.4f}")
+                st.write(f"ν (shape): {nus[j]:.2f}")
                     
 # ----------------- Halaman Prediksi dan Visualisasi -----------------
 elif menu == "Prediksi dan Visualisasi":
@@ -379,6 +391,7 @@ elif menu == "Prediksi dan Visualisasi":
         pis = model['pis']
         betas = model['betas']
         sigmas = model['sigmas']
+        nus = model.get('nus', [2.0] * len(pis))  # Default ν = 2 if not provided
         k = model['k']
         p = model['p']
 
@@ -386,6 +399,7 @@ elif menu == "Prediksi dan Visualisasi":
         X_pred = np.column_stack([data[i:-(p - i)] for i in range(p)])
         pred_len = len(X_pred)
 
+        # Prediksi MAR (tanpa mempertimbangkan distribusi eksplisit GED, cukup bobot + AR)
         y_pred = np.zeros(pred_len)
         for j in range(k):
             y_pred += pis[j] * (X_pred @ betas[j])
