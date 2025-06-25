@@ -42,34 +42,51 @@ if menu == "Home":
         2. data harus memiliki kolom date/tanggal dan harga saham
 
     """)
-
 # ----------------- Halaman Input Data -----------------
 elif menu == "Input Data":
     st.title("📥 Input Data")
     st.markdown("""
-        Ketentuan :
-        1. file harus dalam bentuk csv
-        2. data harus memiliki kolom date/tanggal dan harga saham
+        **Ketentuan**:
+        1. File harus dalam bentuk **CSV**
+        2. Data harus memiliki kolom **tanggal** dan **harga saham**
+        3. Nilai harga sebaiknya berupa angka tanpa simbol (misal: tanpa `Rp`, `%`, atau pemisah ribuan)
     """)
+
     uploaded_file = st.file_uploader("Upload file CSV (delimiter = ';')", type=["csv"])
-    
+
     if uploaded_file:
         try:
             # Membaca file dengan delimiter ;
             df = pd.read_csv(uploaded_file, delimiter=';')
-            # Membersihkan nama kolom dari spasi
-            df.columns = df.columns.str.strip()
-            
-            st.session_state['df'] = df  # Simpan ke session state
-            st.success("Data berhasil dimuat dan dibersihkan!")
-            st.markdown("### 👇 Preview Data")
-            st.dataframe(df.head())
+            df.columns = df.columns.str.strip()  # Bersihkan nama kolom
 
-            st.markdown("### 🧾 Kolom yang tersedia:")
+            st.markdown("### ✅ Pilih Kolom Harga Saham")
+            harga_cols = [col for col in df.columns if df[col].dtype == 'object' or df[col].dtype == 'float64']
+            selected_price_col = st.selectbox("Pilih kolom harga:", harga_cols)
+
+            # Ubah ke numerik
+            df[selected_price_col] = (
+                df[selected_price_col]
+                .astype(str)
+                .str.replace(".", "", regex=False)  # hilangkan pemisah ribuan (opsional)
+                .str.replace(",", ".", regex=False)  # ubah koma ke titik desimal jika perlu
+                .str.replace("[^0-9.-]", "", regex=True)  # hapus karakter selain angka dan titik
+            )
+            df[selected_price_col] = pd.to_numeric(df[selected_price_col], errors="coerce")
+
+            # Simpan ke session
+            st.session_state['df'] = df
+            st.session_state['selected_price_col'] = selected_price_col
+
+            st.success("Data berhasil dimuat dan kolom harga dikonversi ke numerik!")
+            st.markdown("### 👇 Preview Data")
+            st.dataframe(df[[selected_price_col]].head())
+
+            st.markdown("### 🧾 Semua Kolom Tersedia:")
             st.write(list(df.columns))
 
         except Exception as e:
-            st.error(f"Gagal membaca file: {e}")
+            st.error(f"Gagal membaca atau memproses file: {e}")
 
 # ----------------- Halaman Data Preprocessing -----------------
 elif menu == "Data Preprocessing":
