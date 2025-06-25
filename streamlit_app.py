@@ -122,7 +122,7 @@ elif menu == "Data Preprocessing":
 
     # ----------------- Log Return -----------------
     st.markdown("### 3️⃣ Hitung Log Return")
-    df['Log_Return'] = np.log(df[selected_column] / df[selected_column].shift(1))
+    df['Log_Return'] = np.log(df[selected_column] / df[selected_column].shift(1)).dropna()
     df = df.dropna(subset=['Log_Return'])
     st.session_state['log_return'] = df['Log_Return']
     st.session_state['df'] = df  # simpan update dataframe dengan log return
