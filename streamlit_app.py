@@ -228,12 +228,6 @@ elif menu == "Model":
                 st.markdown("### 📋 Ringkasan Model")
                 st.text(model_fit.summary())
 
-                st.markdown("### 📈 Visualisasi Prediksi vs Aktual")
-                st.line_chart(pd.DataFrame({
-                    "Aktual": log_return,
-                    "Prediksi": pred
-                }).dropna())
-
             except Exception as e:
                 st.error(f"❌ Gagal melatih model ARIMA: {e}")
 
