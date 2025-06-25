@@ -36,11 +36,20 @@ if menu == "Home":
     st.markdown("""
         Selamat datang di aplikasi prediksi harga saham berbasis **Streamlit**.  
         Silakan gunakan menu di samping untuk mengakses berbagai fitur mulai dari input data hingga interpretasi hasil model.
+        Ketentuan :
+        1. file harus dalam bentuk csv
+        2. data harus memiliki kolom date/tanggal dan harga saham
+
     """)
 
 # ----------------- Halaman Input Data -----------------
 elif menu == "Input Data":
     st.title("📥 Input Data")
+    st.markdown("""
+        Ketentuan :
+        1. file harus dalam bentuk csv
+        2. data harus memiliki kolom date/tanggal dan harga saham
+    """)
     uploaded_file = st.file_uploader("Upload file CSV", type=["csv"])
     if uploaded_file:
         df = load_data(uploaded_file)
