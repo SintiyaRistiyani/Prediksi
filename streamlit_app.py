@@ -60,10 +60,6 @@ elif menu == "Input Data":
             df = pd.read_csv(uploaded_file, delimiter=';')
             df.columns = df.columns.str.strip()  # Bersihkan nama kolom
 
-            st.markdown("### ✅ Pilih Kolom Harga Saham")
-            harga_cols = [col for col in df.columns if df[col].dtype == 'object' or df[col].dtype == 'float64']
-            selected_price_col = st.selectbox("Pilih kolom harga:", harga_cols)
-
             # Ubah ke numerik
             df[selected_price_col] = (
                 df[selected_price_col]
