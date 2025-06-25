@@ -98,10 +98,10 @@ elif menu == "Data Preprocessing":
         df = st.session_state['df']
         st.markdown("### 1️⃣ Pilih Kolom Data Saham yang Ingin Dianalisis")
 
-        selected_column = st.selectbox("Pilih kolom perusahaan / harga:", df.columns)
-        st.session_state['selected_column'] = selected_column
+selected_column = st.selectbox("Pilih kolom perusahaan / harga:", df.columns)
+st.session_state['selected_column'] = selected_column
 
-        # Deteksi kolom tanggal
+# Deteksi kolom tanggal
 date_cols = [col for col in df.columns if 'tgl' in col.lower() or 'date' in col.lower()]
 selected_date_col = st.selectbox("Pilih kolom tanggal:", date_cols)
 
