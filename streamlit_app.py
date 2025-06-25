@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from io import StringIO
 
-# --------------- Fungsi bantu (opsional bisa dikembangkan) ---------------
+# ----------------- Fungsi bantu -----------------
 def load_data(uploaded_file):
     try:
         df = pd.read_csv(uploaded_file)
@@ -20,7 +20,7 @@ def check_stationarity(df, column):
 
 # ----------------- Sidebar Navigasi -----------------
 st.sidebar.title("📊 Navigasi")
-menu = st.sidebar.markdown("Pilih Halaman:", {
+menu = st.sidebar.radio("Pilih Halaman:", (
     "Home", 
     "Input Data", 
     "Data Preprocessing", 
@@ -28,17 +28,7 @@ menu = st.sidebar.markdown("Pilih Halaman:", {
     "Model", 
     "Prediksi dan Visualisasi", 
     "Interpretasi dan Saran"
-    }
-if 'current_page' not in st.session_state:
-    st.session_state['current_page'] = 'Home'
-if 'selected_currency' not in st.session_state:
-    st.session_state['selected_currency'] = None
-if 'variable_name' not in st.session_state:
-    st.session_state['variable_name'] = "Nama Variabel"
-
-for item, key in menu_items.items():
-    if st.sidebar.button(item, key=key):
-        st.session_state['current_page'] = key
+))
 
 # ----------------- Halaman Home -----------------
 if menu == "Home":
@@ -55,15 +45,17 @@ elif menu == "Input Data":
     if uploaded_file:
         df = load_data(uploaded_file)
         if df is not None:
+            st.session_state['df'] = df  # simpan ke session
             st.success("Data berhasil dimuat!")
             st.dataframe(df.head())
 
 # ----------------- Halaman Data Preprocessing -----------------
 elif menu == "Data Preprocessing":
     st.title("🧹 Data Preprocessing")
-    if 'df' not in locals():
+    if 'df' not in st.session_state:
         st.warning("Silakan upload data terlebih dahulu di halaman Input Data.")
     else:
+        df = st.session_state['df']
         st.markdown("Contoh preprocessing: mengisi missing value.")
         st.write(f"Jumlah nilai kosong sebelum: \n{df.isnull().sum()}")
         df.fillna(method='ffill', inplace=True)
@@ -73,9 +65,10 @@ elif menu == "Data Preprocessing":
 # ----------------- Halaman Stasioneritas -----------------
 elif menu == "Stasioneritas":
     st.title("📉 Uji Stasioneritas")
-    if 'df' not in locals():
+    if 'df' not in st.session_state:
         st.warning("Silakan upload data terlebih dahulu di halaman Input Data.")
     else:
+        df = st.session_state['df']
         kolom = st.selectbox("Pilih kolom untuk diuji:", df.columns)
         result = check_stationarity(df, kolom)
         st.markdown(f"""
