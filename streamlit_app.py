@@ -418,14 +418,35 @@ elif menu == "Prediksi dan Visualisasi":
     st.dataframe(df_pred.tail(10))
 
 # ----------------- Akurasi MAPE -----------------
-st.markdown("### ✅ Akurasi Prediksi (MAPE)")
-df_pred = df_pred.dropna(subset=["Aktual", "Prediksi"])
-mape = mean_absolute_percentage_error(df_pred["Aktual"], df_pred["Prediksi"])
-if np.isnan(mape):
-    st.error("MAPE tidak bisa dihitung karena nilai aktual mengandung nol.")
-else:
-    st.write(f"**MAPE (Mean Absolute Percentage Error)**: {mape:.2f}%")
+# ----------------- Halaman Evaluasi Model -----------------
+elif menu == "Evaluasi Model":
+    st.title("🧪 Evaluasi Model ARIMA")
 
+    if 'arima_pred' not in st.session_state or 'log_return' not in st.session_state:
+        st.warning("Model ARIMA belum dilatih atau data log return tidak tersedia.")
+        st.stop()
+
+    arima_pred = st.session_state['arima_pred']
+    actual = st.session_state['log_return']
+
+    # Selaraskan indeks
+    common_index = actual.index.intersection(arima_pred.index)
+    actual_aligned = actual.loc[common_index]
+    pred_aligned = arima_pred.loc[common_index]
+
+    st.subheader("8. Evaluasi Model ARIMA 🧪")
+    st.info("Metrik evaluasi seperti RMSE, MAE, dan MAPE digunakan untuk mengukur akurasi prediksi.")
+
+    if not actual_aligned.empty:
+        rmse_arima = np.sqrt(np.mean((pred_aligned - actual_aligned)**2))
+        mae_arima = np.mean(np.abs(pred_aligned - actual_aligned))
+        mape_arima = np.mean(np.abs((actual_aligned - pred_aligned) / actual_aligned.replace(0, np.nan))) * 100
+
+        st.write(f"*RMSE (Root Mean Squared Error):* {rmse_arima:.4f}")
+        st.write(f"*MAE (Mean Absolute Error):* {mae_arima:.4f}")
+        st.write(f"*MAPE (Mean Absolute Percentage Error):* {mape_arima:.2f}%")
+    else:
+        st.warning("Tidak ada data aktual yang cocok untuk evaluasi. Pastikan rentang indeks data uji sesuai dengan prediksi. 🤷")
 # ----------------- Halaman Interpretasi dan Saran -----------------
 elif menu == "Interpretasi dan Saran":
     st.title("📝 Interpretasi dan Saran")
