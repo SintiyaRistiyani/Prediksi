@@ -340,19 +340,65 @@ elif menu == "Model":
                     st.write(f"Koefisien AR: {betas[j]}")
                     st.write(f"σ²: {sigmas[j]**2:.6f}")
                     st.write(f"Proporsi: {pis[j]:.4f}")
+                    
 # ----------------- Halaman Prediksi dan Visualisasi -----------------
 elif menu == "Prediksi dan Visualisasi":
     st.title("📊 Prediksi dan Visualisasi")
-    st.markdown("Tampilkan hasil prediksi dan visualisasinya di sini.")
-    # Dummy data contoh
-    t = np.arange(100)
-    pred = np.sin(t/10)
-    real = pred + np.random.normal(0, 0.1, size=100)
-    plt.figure(figsize=(10,4))
-    plt.plot(t, real, label="Real")
-    plt.plot(t, pred, label="Prediksi")
-    plt.legend()
-    st.pyplot(plt)
+
+    if 'model_type' not in st.session_state:
+        st.warning("Model belum dilatih. Silakan latih model terlebih dahulu di halaman 'Model'.")
+        st.stop()
+
+    model_type = st.session_state['model_type']
+    log_return = st.session_state['log_return']
+
+    st.markdown(f"### 🔮 Hasil Prediksi Menggunakan Model: **{model_type}**")
+
+    if model_type == "ARIMA":
+        if 'arima_model' not in st.session_state:
+            st.warning("Model ARIMA belum dilatih.")
+            st.stop()
+
+        model_fit = st.session_state['arima_model']
+        pred = model_fit.predict()
+        df_pred = pd.DataFrame({
+            "Aktual": log_return,
+            "Prediksi": pred
+        }).dropna()
+
+        st.line_chart(df_pred)
+
+    elif model_type == "Mixture Autoregressive (MAR)":
+        if 'mar_model' not in st.session_state:
+            st.warning("Model MAR belum dilatih.")
+            st.stop()
+
+        model = st.session_state['mar_model']
+        pis = model['pis']
+        betas = model['betas']
+        sigmas = model['sigmas']
+        k = model['k']
+        p = model['p']
+
+        data = log_return.dropna().values
+        X_pred = np.column_stack([data[i:-(p - i)] for i in range(p)])
+        pred_len = len(X_pred)
+
+        # Hitung prediksi MAR sebagai rata-rata tertimbang dari setiap komponen
+        y_pred = np.zeros(pred_len)
+        for j in range(k):
+            y_pred += pis[j] * (X_pred @ betas[j])
+
+        y_actual = data[p:]
+
+        df_pred = pd.DataFrame({
+            "Aktual": y_actual,
+            "Prediksi": y_pred
+        }).dropna()
+
+        st.line_chart(df_pred)
+
+        st.markdown("✅ Prediksi selesai menggunakan model MAR")
 
 # ----------------- Halaman Interpretasi dan Saran -----------------
 elif menu == "Interpretasi dan Saran":
