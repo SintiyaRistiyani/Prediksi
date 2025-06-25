@@ -60,26 +60,24 @@ elif menu == "Input Data":
             df = pd.read_csv(uploaded_file, delimiter=';')
             df.columns = df.columns.str.strip()  # Bersihkan nama kolom
 
-            # Ubah ke numerik
-            df[selected_price_col] = (
-                df[selected_price_col]
+            st.markdown("### ✅ Pilih Kolom Harga")
+            harga_col = st.selectbox("Pilih kolom harga saham:", df.columns)
+            
+            # Konversi harga ke numerik
+            df[harga_col] = (
+                df[harga_col]
                 .astype(str)
-                .str.replace(".", "", regex=False)  # hilangkan pemisah ribuan (opsional)
-                .str.replace(",", ".", regex=False)  # ubah koma ke titik desimal jika perlu
-                .str.replace("[^0-9.-]", "", regex=True)  # hapus karakter selain angka dan titik
+                .str.replace(".", "", regex=False)
+                .str.replace(",", ".", regex=False)
+                .str.replace("[^0-9.-]", "", regex=True)
             )
-            df[selected_price_col] = pd.to_numeric(df[selected_price_col], errors="coerce")
+            df[harga_col] = pd.to_numeric(df[harga_col], errors="coerce")
 
-            # Simpan ke session
             st.session_state['df'] = df
-            st.session_state['selected_price_col'] = selected_price_col
+            st.session_state['selected_price_col'] = harga_col
 
-            st.success("Data berhasil dimuat dan kolom harga dikonversi ke numerik!")
-            st.markdown("### 👇 Preview Data")
-            st.dataframe(df[[selected_price_col]].head())
-
-            st.markdown("### 🧾 Semua Kolom Tersedia:")
-            st.write(list(df.columns))
+            st.success("✅ Data berhasil dimuat dan kolom harga dikonversi ke numerik.")
+            st.dataframe(df.head())
 
         except Exception as e:
             st.error(f"Gagal membaca atau memproses file: {e}")
@@ -87,38 +85,25 @@ elif menu == "Input Data":
 # ----------------- Halaman Data Preprocessing -----------------
 elif menu == "Data Preprocessing":
     st.title("🧹 Data Preprocessing")
-    
-    if 'df' not in st.session_state:
+
+    if 'df' not in st.session_state or 'selected_price_col' not in st.session_state:
         st.warning("Silakan upload data terlebih dahulu di halaman Input Data.")
     else:
         df = st.session_state['df']
-        st.markdown("### 1️⃣ Pilih Kolom Data Saham yang Ingin Dianalisis")
+        selected_column = st.session_state['selected_price_col']
 
-selected_column = st.selectbox("Pilih kolom perusahaan / harga:", df.columns)
-st.session_state['selected_column'] = selected_column
+        # Pilih kolom tanggal
+        date_cols = [col for col in df.columns if 'tgl' in col.lower() or 'date' in col.lower()]
+        selected_date_col = st.selectbox("Pilih kolom tanggal:", date_cols)
 
-# Deteksi kolom tanggal
-date_cols = [col for col in df.columns if 'tgl' in col.lower() or 'date' in col.lower()]
-selected_date_col = st.selectbox("Pilih kolom tanggal:", date_cols)
+        df[selected_date_col] = pd.to_datetime(df[selected_date_col], errors='coerce')
+        df = df.dropna(subset=[selected_date_col])
+        df = df.sort_values(by=selected_date_col).reset_index(drop=True)
 
-# Ubah kolom tanggal ke datetime
-df[selected_date_col] = pd.to_datetime(df[selected_date_col], errors='coerce')
+        st.markdown(f"### 📈 Data Asli dari Kolom **{selected_column}**")
+        df_plot = df[[selected_date_col, selected_column]].dropna().set_index(selected_date_col)
+        st.line_chart(df_plot)
 
-# Hapus baris dengan tanggal kosong
-df = df.dropna(subset=[selected_date_col])
-
-# Urutkan berdasarkan tanggal
-df = df.sort_values(by=selected_date_col)
-
-# Reset index agar plot tidak error
-df = df.reset_index(drop=True)
-
-# Visualisasi dengan tanggal sebagai index
-st.markdown(f"### 📈 Data Asli dari Kolom **{selected_column}**")
-df_plot = df[[selected_date_col, selected_column]].dropna()
-df_plot = df_plot.set_index(selected_date_col)
-
-st.line_chart(df_plot)
         # Missing Value Handling
         st.markdown("### 2️⃣ Penanganan Missing Value")
         st.write(f"Jumlah nilai kosong sebelum: {df[selected_column].isnull().sum()}")
@@ -131,6 +116,7 @@ st.line_chart(df_plot)
         else:
             df_clean = df[selected_column].fillna(method=method)
 
+        df_clean = pd.to_numeric(df_clean, errors='coerce')
         st.write(f"Jumlah nilai kosong setelah: {df_clean.isnull().sum()}")
 
         # Log Return
@@ -141,8 +127,28 @@ st.line_chart(df_plot)
 
         # Visualisasi
         st.markdown("### 4️⃣ Visualisasi Data dan Log Return")
-        st.line_chart(df_clean, use_container_width=True)
-        st.line_chart(log_return, use_container_width=True)
+
+        # Gabungkan untuk visual
+        df_viz = pd.DataFrame({
+            'Tanggal': df[selected_date_col],
+            'Harga': df_clean,
+            'LogReturn': log_return
+        }).dropna().set_index('Tanggal')
+
+        fig, ax = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+
+        ax[0].plot(df_viz.index, df_viz['Harga'], color='blue')
+        ax[0].set_title("Harga Saham")
+
+        ax[1].plot(df_viz.index, df_viz['LogReturn'], color='green')
+        ax[1].set_title("Log Return")
+
+        for axis in ax:
+            axis.grid(True)
+            axis.tick_params(axis='x', rotation=45)
+
+        plt.tight_layout()
+        st.pyplot(fig)
 
 # ----------------- Halaman Stasioneritas -----------------
 elif menu == "Stasioneritas":
