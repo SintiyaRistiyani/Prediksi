@@ -32,8 +32,7 @@ menu = st.sidebar.radio("Pilih Halaman:", (
 
 # ----------------- Halaman Home -----------------
 if menu == "Home":
-    st.title("📈 Aplikasi Prediksi Harga Saham
-                Model ARIMA dan MAR")
+    st.title("📈 Aplikasi Prediksi Harga Saham Menggunakan Model ARIMA dan MAR")
     st.markdown("""
         Selamat datang di aplikasi prediksi harga saham berbasis **Streamlit**.  
         Silakan gunakan menu di samping untuk mengakses berbagai fitur mulai dari input data hingga interpretasi hasil model.
@@ -63,15 +62,43 @@ elif menu == "Input Data":
 # ----------------- Halaman Data Preprocessing -----------------
 elif menu == "Data Preprocessing":
     st.title("🧹 Data Preprocessing")
+    
     if 'df' not in st.session_state:
         st.warning("Silakan upload data terlebih dahulu di halaman Input Data.")
     else:
         df = st.session_state['df']
-        st.markdown("Contoh preprocessing: mengisi missing value.")
-        st.write(f"Jumlah nilai kosong sebelum: \n{df.isnull().sum()}")
-        df.fillna(method='ffill', inplace=True)
-        st.write(f"Jumlah nilai kosong setelah: \n{df.isnull().sum()}")
-        st.dataframe(df.head())
+        st.markdown("### 1️⃣ Pilih Kolom Data Saham yang Ingin Dianalisis")
+
+        selected_column = st.selectbox("Pilih kolom perusahaan / harga:", df.columns)
+        st.session_state['selected_column'] = selected_column
+
+        st.markdown(f"Data asli dari kolom **{selected_column}**:")
+        st.line_chart(df[selected_column])
+
+        # Missing Value Handling
+        st.markdown("### 2️⃣ Penanganan Missing Value")
+        st.write(f"Jumlah nilai kosong sebelum: {df[selected_column].isnull().sum()}")
+        method = st.selectbox("Metode pengisian missing value", ['ffill', 'bfill', 'interpolate', 'drop'])
+
+        if method == 'drop':
+            df_clean = df[selected_column].dropna()
+        elif method == 'interpolate':
+            df_clean = df[selected_column].interpolate()
+        else:
+            df_clean = df[selected_column].fillna(method=method)
+
+        st.write(f"Jumlah nilai kosong setelah: {df_clean.isnull().sum()}")
+
+        # Log Return
+        st.markdown("### 3️⃣ Hitung Log Return")
+        log_return = np.log(df_clean / df_clean.shift(1)).dropna()
+        st.dataframe(log_return.head())
+        st.session_state['log_return'] = log_return
+
+        # Visualisasi
+        st.markdown("### 4️⃣ Visualisasi Data dan Log Return")
+        st.line_chart(df_clean, use_container_width=True)
+        st.line_chart(log_return, use_container_width=True)
 
 # ----------------- Halaman Stasioneritas -----------------
 elif menu == "Stasioneritas":
