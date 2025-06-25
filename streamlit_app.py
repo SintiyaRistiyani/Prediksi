@@ -362,7 +362,9 @@ elif menu == "Prediksi dan Visualisasi":
     model_type = st.session_state['model_type']
     log_return = st.session_state['log_return'].dropna()
     st.markdown(f"### 🔮 Hasil Prediksi Menggunakan Model: **{model_type}**")
-
+    
+    forecast_steps = st.number_input("Masukkan jumlah langkah prediksi ke depan:"
+                                     
     def mean_absolute_percentage_error(y_true, y_pred):
         y_true, y_pred = np.array(y_true), np.array(y_pred)
         return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
