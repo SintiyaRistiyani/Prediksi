@@ -51,13 +51,25 @@ elif menu == "Input Data":
         1. file harus dalam bentuk csv
         2. data harus memiliki kolom date/tanggal dan harga saham
     """)
-    uploaded_file = st.file_uploader("Upload file CSV", type=["csv"])
+    uploaded_file = st.file_uploader("Upload file CSV (delimiter = ';')", type=["csv"])
+    
     if uploaded_file:
-        df = load_data(uploaded_file)
-        if df is not None:
-            st.session_state['df'] = df  # simpan ke session
-            st.success("Data berhasil dimuat!")
+        try:
+            # Membaca file dengan delimiter ;
+            df = pd.read_csv(uploaded_file, delimiter=';')
+            # Membersihkan nama kolom dari spasi
+            df.columns = df.columns.str.strip()
+            
+            st.session_state['df'] = df  # Simpan ke session state
+            st.success("Data berhasil dimuat dan dibersihkan!")
+            st.markdown("### 👇 Preview Data")
             st.dataframe(df.head())
+
+            st.markdown("### 🧾 Kolom yang tersedia:")
+            st.write(list(df.columns))
+
+        except Exception as e:
+            st.error(f"Gagal membaca file: {e}")
 
 # ----------------- Halaman Data Preprocessing -----------------
 elif menu == "Data Preprocessing":
