@@ -152,21 +152,39 @@ elif menu == "Data Preprocessing":
 
 # ----------------- Halaman Stasioneritas -----------------
 elif menu == "Stasioneritas":
-    st.title("📉 Uji Stasioneritas")
-    if 'df' not in st.session_state:
-        st.warning("Silakan upload data terlebih dahulu di halaman Input Data.")
+    st.title("📉 Uji Stasioneritas (ADF Test - Log Return)")
+
+    # Validasi apakah log return tersedia
+    if 'log_return' not in st.session_state or 'selected_price_col' not in st.session_state:
+        st.warning("Silakan lakukan preprocessing terlebih dahulu agar log return tersedia.")
+        st.stop()
+
+    log_return = st.session_state['log_return']
+    selected_col = st.session_state['selected_price_col']
+
+    st.markdown(f"Kolom yang dianalisis: **{selected_col}**")
+    st.markdown("Uji stasioneritas dilakukan terhadap **log return** dari data harga saham.")
+
+    # Siapkan dataframe log return untuk uji ADF
+    df_test = pd.DataFrame(log_return, columns=[selected_col])
+
+    # Jalankan ADF test
+    result = check_stationarity(df_test, selected_col)
+
+    st.markdown(f"""
+    **Hasil Uji ADF (Augmented Dickey-Fuller):**
+    - **ADF Statistic**: {result[0]:.4f}  
+    - **p-value**: {result[1]:.4f}  
+    - **Critical Values**:
+    """)
+    for key, value in result[4].items():
+        st.markdown(f"- {key}: {value:.4f}")
+
+    # Interpretasi
+    if result[1] < 0.05:
+        st.success("✅ Log return stasioner (tolak H0 - tidak ada akar unit).")
     else:
-        df = st.session_state['df']
-        kolom = st.selectbox("Pilih kolom untuk diuji:", df.columns)
-        result = check_stationarity(df, kolom)
-        st.markdown(f"""
-        **ADF Statistic**: {result[0]:.4f}  
-        **p-value**: {result[1]:.4f}  
-        """)
-        if result[1] < 0.05:
-            st.success("Data stasioner (tolak H0)")
-        else:
-            st.error("Data tidak stasioner (gagal tolak H0)")
+        st.error("❌ Log return tidak stasioner (gagal tolak H0 - ada akar unit).")
 
 # ----------------- Halaman Model -----------------
 elif menu == "Model":
