@@ -32,10 +32,12 @@ menu = st.sidebar.radio("Pilih Halaman:", (
 
 # ----------------- Halaman Home -----------------
 if menu == "Home":
-    st.title("📈 Aplikasi Prediksi Harga Saham")
+    st.title("📈 Aplikasi Prediksi Harga Saham
+                Model ARIMA dan MAR")
     st.markdown("""
         Selamat datang di aplikasi prediksi harga saham berbasis **Streamlit**.  
         Silakan gunakan menu di samping untuk mengakses berbagai fitur mulai dari input data hingga interpretasi hasil model.
+        
         Ketentuan :
         1. file harus dalam bentuk csv
         2. data harus memiliki kolom date/tanggal dan harga saham
