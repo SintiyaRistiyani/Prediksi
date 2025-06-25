@@ -355,59 +355,64 @@ elif model_type == "Mixture Autoregressive (MAR)":
 elif menu == "Prediksi dan Visualisasi":
     st.title("📊 Prediksi dan Visualisasi")
 
-    if 'model_type' not in st.session_state:
-        st.warning("Model belum dilatih. Silakan latih model terlebih dahulu di halaman 'Model'.")
+    if 'model_type' not in st.session_state or 'log_return' not in st.session_state:
+        st.warning("Model belum dilatih atau log return tidak tersedia.")
         st.stop()
+
+    model_type = st.session_state['model_type']
+    log_return = st.session_state['log_return'].dropna()
+    st.markdown(f"### 🔮 Hasil Prediksi Menggunakan Model: **{model_type}**")
 
     def mean_absolute_percentage_error(y_true, y_pred):
         y_true, y_pred = np.array(y_true), np.array(y_pred)
         return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
 
-    model_type = st.session_state['model_type']
-    log_return = st.session_state['log_return']
-
-    st.markdown(f"### 🔮 Hasil Prediksi Menggunakan Model: **{model_type}**")
-
+    # ----------------- Prediksi dengan ARIMA -----------------
     if model_type == "ARIMA":
         if 'arima_model' not in st.session_state:
-            st.warning("Model ARIMA belum dilatih.")
+            st.warning("Model ARIMA belum tersedia.")
             st.stop()
 
         model_fit = st.session_state['arima_model']
-        pred = model_fit.predict()
-        df_pred = pd.DataFrame({
-            "Aktual": log_return,
-            "Prediksi": pred
-        }).dropna()
+        pred = model_fit.predict(start=0, end=len(log_return)-1)
 
+        df_pred = pd.DataFrame({
+            "Aktual": log_return.values,
+            "Prediksi": pred.values
+        }, index=log_return.index).dropna()
+
+    # ----------------- Prediksi dengan MAR -----------------
     elif model_type == "Mixture Autoregressive (MAR)":
         if 'mar_model' not in st.session_state:
-            st.warning("Model MAR belum dilatih.")
+            st.warning("Model MAR belum tersedia.")
             st.stop()
 
         model = st.session_state['mar_model']
         pis = model['pis']
         betas = model['betas']
         sigmas = model['sigmas']
-        nus = model.get('nus', [2.0] * len(pis))  # Default ν = 2 if not provided
+        nus = model['nus']
         k = model['k']
         p = model['p']
 
-        data = log_return.dropna().values
+        data = log_return.values
+        if len(data) <= p:
+            st.error("Data tidak cukup untuk membuat prediksi MAR dengan order p.")
+            st.stop()
+
+        # Membentuk data X untuk prediksi
         X_pred = np.column_stack([data[i:-(p - i)] for i in range(p)])
+        y_actual = data[p:]
         pred_len = len(X_pred)
 
-        # Prediksi MAR (tanpa mempertimbangkan distribusi eksplisit GED, cukup bobot + AR)
         y_pred = np.zeros(pred_len)
         for j in range(k):
             y_pred += pis[j] * (X_pred @ betas[j])
 
-        y_actual = data[p:]
-
         df_pred = pd.DataFrame({
             "Aktual": y_actual,
             "Prediksi": y_pred
-        }).dropna()
+        }, index=log_return.index[p:]).dropna()
 
     # ----------------- Visualisasi -----------------
     st.markdown("### 📈 Visualisasi Prediksi vs Aktual")
@@ -417,36 +422,11 @@ elif menu == "Prediksi dan Visualisasi":
     st.markdown("### 📋 Tabel Hasil Prediksi (10 Baris Terakhir)")
     st.dataframe(df_pred.tail(10))
 
-# ----------------- Akurasi MAPE -----------------
-# ----------------- Halaman Evaluasi Model -----------------
-elif menu == "Evaluasi Model":
-    st.title("🧪 Evaluasi Model ARIMA")
+    # ----------------- Evaluasi -----------------
+    st.markdown("### ✅ Evaluasi Akurasi (MAPE)")
+    mape = mean_absolute_percentage_error(df_pred["Aktual"], df_pred["Prediksi"])
+    st.write(f"**MAPE (Mean Absolute Percentage Error):** {mape:.2f}%")
 
-    if 'arima_pred' not in st.session_state or 'log_return' not in st.session_state:
-        st.warning("Model ARIMA belum dilatih atau data log return tidak tersedia.")
-        st.stop()
-
-    arima_pred = st.session_state['arima_pred']
-    actual = st.session_state['log_return']
-
-    # Selaraskan indeks
-    common_index = actual.index.intersection(arima_pred.index)
-    actual_aligned = actual.loc[common_index]
-    pred_aligned = arima_pred.loc[common_index]
-
-    st.subheader("8. Evaluasi Model ARIMA 🧪")
-    st.info("Metrik evaluasi seperti RMSE, MAE, dan MAPE digunakan untuk mengukur akurasi prediksi.")
-
-    if not actual_aligned.empty:
-        rmse_arima = np.sqrt(np.mean((pred_aligned - actual_aligned)**2))
-        mae_arima = np.mean(np.abs(pred_aligned - actual_aligned))
-        mape_arima = np.mean(np.abs((actual_aligned - pred_aligned) / actual_aligned.replace(0, np.nan))) * 100
-
-        st.write(f"*RMSE (Root Mean Squared Error):* {rmse_arima:.4f}")
-        st.write(f"*MAE (Mean Absolute Error):* {mae_arima:.4f}")
-        st.write(f"*MAPE (Mean Absolute Percentage Error):* {mape_arima:.2f}%")
-    else:
-        st.warning("Tidak ada data aktual yang cocok untuk evaluasi. Pastikan rentang indeks data uji sesuai dengan prediksi. 🤷")
 # ----------------- Halaman Interpretasi dan Saran -----------------
 elif menu == "Interpretasi dan Saran":
     st.title("📝 Interpretasi dan Saran")
