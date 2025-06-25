@@ -349,6 +349,10 @@ elif menu == "Prediksi dan Visualisasi":
         st.warning("Model belum dilatih. Silakan latih model terlebih dahulu di halaman 'Model'.")
         st.stop()
 
+    def mean_absolute_percentage_error(y_true, y_pred):
+        y_true, y_pred = np.array(y_true), np.array(y_pred)
+        return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+
     model_type = st.session_state['model_type']
     log_return = st.session_state['log_return']
 
@@ -366,8 +370,6 @@ elif menu == "Prediksi dan Visualisasi":
             "Prediksi": pred
         }).dropna()
 
-        st.line_chart(df_pred)
-
     elif model_type == "Mixture Autoregressive (MAR)":
         if 'mar_model' not in st.session_state:
             st.warning("Model MAR belum dilatih.")
@@ -384,7 +386,6 @@ elif menu == "Prediksi dan Visualisasi":
         X_pred = np.column_stack([data[i:-(p - i)] for i in range(p)])
         pred_len = len(X_pred)
 
-        # Hitung prediksi MAR sebagai rata-rata tertimbang dari setiap komponen
         y_pred = np.zeros(pred_len)
         for j in range(k):
             y_pred += pis[j] * (X_pred @ betas[j])
@@ -396,9 +397,18 @@ elif menu == "Prediksi dan Visualisasi":
             "Prediksi": y_pred
         }).dropna()
 
-        st.line_chart(df_pred)
+    # ----------------- Visualisasi -----------------
+    st.markdown("### 📈 Visualisasi Prediksi vs Aktual")
+    st.line_chart(df_pred)
 
-        st.markdown("✅ Prediksi selesai menggunakan model MAR")
+    # ----------------- Tabel Prediksi -----------------
+    st.markdown("### 📋 Tabel Hasil Prediksi (10 Baris Terakhir)")
+    st.dataframe(df_pred.tail(10))
+
+    # ----------------- Akurasi MAPE -----------------
+    st.markdown("### ✅ Akurasi Prediksi (MAPE)")
+    mape = mean_absolute_percentage_error(df_pred["Aktual"], df_pred["Prediksi"])
+    st.write(f"**MAPE (Mean Absolute Percentage Error)**: {mape:.2f}%")
 
 # ----------------- Halaman Interpretasi dan Saran -----------------
 elif menu == "Interpretasi dan Saran":
