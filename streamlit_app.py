@@ -119,11 +119,15 @@ elif menu == "Data Preprocessing":
         df_clean = pd.to_numeric(df_clean, errors='coerce')
         st.write(f"Jumlah nilai kosong setelah: {df_clean.isnull().sum()}")
 
-        # Log Return
-        st.markdown("### 3️⃣ Hitung Log Return")
-        log_return = np.log(df_clean / df_clean.shift(1)).dropna()
-        st.dataframe(log_return.head())
-        st.session_state['log_return'] = log_return
+
+    # ----------------- Log Return -----------------
+    st.markdown("### 3️⃣ Hitung Log Return")
+    df['Log_Return'] = np.log(df[selected_column] / df[selected_column].shift(1))
+    df = df.dropna(subset=['Log_Return'])
+    st.session_state['log_return'] = df['Log_Return']
+    st.session_state['df'] = df  # simpan update dataframe dengan log return
+
+    st.dataframe(df[[selected_column, 'Log_Return']].head()
 
         # Visualisasi
         st.markdown("### 4️⃣ Visualisasi Data dan Log Return")
