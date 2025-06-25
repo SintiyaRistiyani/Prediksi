@@ -101,9 +101,28 @@ elif menu == "Data Preprocessing":
         selected_column = st.selectbox("Pilih kolom perusahaan / harga:", df.columns)
         st.session_state['selected_column'] = selected_column
 
-        st.markdown(f"Data asli dari kolom **{selected_column}**:")
-        st.line_chart(df[selected_column])
+        # Deteksi kolom tanggal
+date_cols = [col for col in df.columns if 'tgl' in col.lower() or 'date' in col.lower()]
+selected_date_col = st.selectbox("Pilih kolom tanggal:", date_cols)
 
+# Ubah kolom tanggal ke datetime
+df[selected_date_col] = pd.to_datetime(df[selected_date_col], errors='coerce')
+
+# Hapus baris dengan tanggal kosong
+df = df.dropna(subset=[selected_date_col])
+
+# Urutkan berdasarkan tanggal
+df = df.sort_values(by=selected_date_col)
+
+# Reset index agar plot tidak error
+df = df.reset_index(drop=True)
+
+# Visualisasi dengan tanggal sebagai index
+st.markdown(f"### 📈 Data Asli dari Kolom **{selected_column}**")
+df_plot = df[[selected_date_col, selected_column]].dropna()
+df_plot = df_plot.set_index(selected_date_col)
+
+st.line_chart(df_plot)
         # Missing Value Handling
         st.markdown("### 2️⃣ Penanganan Missing Value")
         st.write(f"Jumlah nilai kosong sebelum: {df[selected_column].isnull().sum()}")
