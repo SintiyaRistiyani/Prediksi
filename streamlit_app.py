@@ -168,9 +168,11 @@ elif menu == "Stasioneritas":
     # Siapkan dataframe log return untuk uji ADF
     df_test = pd.DataFrame(log_return, columns=[selected_col])
 
-    # Jalankan ADF test
-    result = check_stationarity(df_test, selected_col)
+     # Fungsi ADF Test
+    from statsmodels.tsa.stattools import adfuller
+    result = adfuller(df_test[selected_col].dropna())
 
+    # Tampilkan hasil
     st.markdown(f"""
     **Hasil Uji ADF (Augmented Dickey-Fuller):**
     - **ADF Statistic**: {result[0]:.4f}  
