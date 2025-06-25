@@ -417,9 +417,13 @@ elif menu == "Prediksi dan Visualisasi":
     st.markdown("### 📋 Tabel Hasil Prediksi (10 Baris Terakhir)")
     st.dataframe(df_pred.tail(10))
 
-    # ----------------- Akurasi MAPE -----------------
-    st.markdown("### ✅ Akurasi Prediksi (MAPE)")
-    mape = mean_absolute_percentage_error(df_pred["Aktual"], df_pred["Prediksi"])
+# ----------------- Akurasi MAPE -----------------
+st.markdown("### ✅ Akurasi Prediksi (MAPE)")
+df_pred = df_pred.dropna(subset=["Aktual", "Prediksi"])
+mape = mean_absolute_percentage_error(df_pred["Aktual"], df_pred["Prediksi"])
+if np.isnan(mape):
+    st.error("MAPE tidak bisa dihitung karena nilai aktual mengandung nol.")
+else:
     st.write(f"**MAPE (Mean Absolute Percentage Error)**: {mape:.2f}%")
 
 # ----------------- Halaman Interpretasi dan Saran -----------------
