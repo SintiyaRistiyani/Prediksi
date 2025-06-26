@@ -127,7 +127,7 @@ elif menu == "Data Preprocessing":
     st.session_state['log_return'] = df['Log_Return']
     st.session_state['df'] = df  # simpan update dataframe dengan log return
 
-    st.dataframe(df[[selected_column, 'Log_Return']].head()
+    st.dataframe(df[[selected_column, 'Log_Return']].head())
 
         # Visualisasi
         st.markdown("### 4️⃣ Visualisasi Data dan Log Return")
