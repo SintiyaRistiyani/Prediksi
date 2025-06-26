@@ -172,17 +172,17 @@ elif menu == "Stasioneritas":
     # Siapkan dataframe log return untuk uji ADF
     df_test = pd.DataFrame(log_return, columns=[selected_col])
 
-     # Fungsi ADF Test
+    # Fungsi ADF Test
     from statsmodels.tsa.stattools import adfuller
     result = adfuller(df_test[selected_col].dropna())
 
     # Tampilkan hasil
-    st.markdown(f"""
+    st.markdown("""
     **Hasil Uji ADF (Augmented Dickey-Fuller):**
-    - **ADF Statistic**: {result[0]:.4f}  
-    - **p-value**: {result[1]:.4f}  
+    - **ADF Statistic**: {:.4f}  
+    - **p-value**: {:.4f}  
     - **Critical Values**:
-    """)
+    """.format(result[0], result[1]))
     for key, value in result[4].items():
         st.markdown(f"- {key}: {value:.4f}")
 
