@@ -119,18 +119,19 @@ elif menu == "Data Preprocessing":
         df_clean = pd.to_numeric(df_clean, errors='coerce')
         st.write(f"Jumlah nilai kosong setelah: {df_clean.isnull().sum()}")
 
+        # ----------------- Log Return -----------------
+        st.markdown("### 3️⃣ Hitung Log Return")
+        df['Log_Return'] = np.log(df[selected_column] / df[selected_column].shift(1))
+        df = df.dropna(subset=['Log_Return'])
+        st.session_state['log_return'] = df['Log_Return']
+        st.session_state['df'] = df  # simpan update dataframe dengan log return
 
-    # ----------------- Log Return -----------------
-    st.markdown("### 3️⃣ Hitung Log Return")
-    df['Log_Return'] = np.log(df[selected_column] / df[selected_column].shift(1)).dropna()
-    df = df.dropna(subset=['Log_Return'])
-    st.session_state['log_return'] = df['Log_Return']
-    st.session_state['df'] = df  # simpan update dataframe dengan log return
-
-    st.dataframe(df[[selected_column, 'Log_Return']].head())
+        st.dataframe(df[[selected_column, 'Log_Return']].head())
 
         # Visualisasi
-    st.markdown("### 4️⃣ Visualisasi Data dan Log Return")
+        st.markdown("### 4️⃣ Visualisasi Data dan Log Return")
+
+        log_return = st.session_state['log_return']
 
         # Gabungkan untuk visual
         df_viz = pd.DataFrame({
@@ -363,8 +364,8 @@ elif menu == "Prediksi dan Visualisasi":
     log_return = st.session_state['log_return'].dropna()
     st.markdown(f"### 🔮 Hasil Prediksi Menggunakan Model: **{model_type}**")
     
-    forecast_steps = st.number_input("Masukkan jumlah langkah prediksi ke depan:"
-                                     
+    forecast_steps = st.number_input("Masukkan jumlah langkah prediksi ke depan:", min_value=1, value=10, step=1)
+
     def mean_absolute_percentage_error(y_true, y_pred):
         y_true, y_pred = np.array(y_true), np.array(y_pred)
         return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
@@ -402,8 +403,8 @@ elif menu == "Prediksi dan Visualisasi":
             st.error("Data tidak cukup untuk membuat prediksi MAR dengan order p.")
             st.stop()
 
-        # Membentuk data X untuk prediksi
-        X_pred = np.column_stack([data[i:-(p - i)] for i in range(p)])
+        # Membentuk data X untuk prediksi, pastikan slicing valid
+        X_pred = np.column_stack([data[i:len(data)-(p - i)] for i in range(p)])
         y_actual = data[p:]
         pred_len = len(X_pred)
 
