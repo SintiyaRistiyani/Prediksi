@@ -130,7 +130,7 @@ elif menu == "Data Preprocessing":
     st.dataframe(df[[selected_column, 'Log_Return']].head())
 
         # Visualisasi
-        st.markdown("### 4️⃣ Visualisasi Data dan Log Return")
+    st.markdown("### 4️⃣ Visualisasi Data dan Log Return")
 
         # Gabungkan untuk visual
         df_viz = pd.DataFrame({
