@@ -360,29 +360,15 @@ elif menu == "Prediksi dan Visualisasi":
     model_type = st.session_state['model_type']
     log_return = st.session_state['log_return'].dropna()
     st.markdown(f"### 🔮 Hasil Prediksi Menggunakan Model: **{model_type}**")
-    
+
     forecast_steps = st.number_input("Masukkan jumlah langkah prediksi ke depan:", min_value=1, value=10, step=1)
 
     def mean_absolute_percentage_error(y_true, y_pred):
         y_true, y_pred = np.array(y_true), np.array(y_pred)
         return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
 
-    # ----------------- Prediksi dengan ARIMA -----------------
-    if model_type == "ARIMA":
-        if 'arima_model' not in st.session_state:
-            st.warning("Model ARIMA belum tersedia.")
-            st.stop()
-
-        model_fit = st.session_state['arima_model']
-        pred = model_fit.predict(start=0, end=len(log_return)-1)
-
-        df_pred = pd.DataFrame({
-            "Aktual": log_return.values,
-            "Prediksi": pred.values
-        }, index=log_return.index).dropna()
-
     # ----------------- Prediksi dengan MAR -----------------
-    elif model_type == "Mixture Autoregressive (MAR)":
+    if model_type.startswith("MAR"):
         if 'mar_model' not in st.session_state:
             st.warning("Model MAR belum tersedia.")
             st.stop()
@@ -394,13 +380,14 @@ elif menu == "Prediksi dan Visualisasi":
         nus = model['nus']
         k = model['k']
         p = model['p']
+        dist = model['dist']
 
         data = log_return.values
         if len(data) <= p:
             st.error("Data tidak cukup untuk membuat prediksi MAR dengan order p.")
             st.stop()
 
-        # Membentuk data X untuk prediksi, pastikan slicing valid
+        # Prediksi in-sample (sepanjang data tersedia)
         X_pred = np.column_stack([data[i:len(data)-(p - i)] for i in range(p)])
         y_actual = data[p:]
         pred_len = len(X_pred)
@@ -413,6 +400,25 @@ elif menu == "Prediksi dan Visualisasi":
             "Aktual": y_actual,
             "Prediksi": y_pred
         }, index=log_return.index[p:]).dropna()
+
+        # Prediksi ke depan (out-of-sample)
+        last_values = data[-p:].copy()
+        forecast = []
+
+        for _ in range(forecast_steps):
+            step_pred = 0
+            for j in range(k):
+                ar_input = last_values[-p:]
+                step_pred += pis[j] * (betas[j] @ ar_input)
+            forecast.append(step_pred)
+            last_values = np.append(last_values, step_pred)[-p:]
+
+        st.markdown("### 🔮 Prediksi Out-of-Sample")
+        st.line_chart(pd.Series(forecast, name="Prediksi ke depan"))
+
+    else:
+        st.error("Model yang dipilih tidak didukung.")
+        st.stop()
 
     # ----------------- Visualisasi -----------------
     st.markdown("### 📈 Visualisasi Prediksi vs Aktual")
@@ -427,16 +433,3 @@ elif menu == "Prediksi dan Visualisasi":
     mape = mean_absolute_percentage_error(df_pred["Aktual"], df_pred["Prediksi"])
     st.write(f"**MAPE (Mean Absolute Percentage Error):** {mape:.2f}%")
 
-# ----------------- Halaman Interpretasi dan Saran -----------------
-elif menu == "Interpretasi dan Saran":
-    st.title("📝 Interpretasi dan Saran")
-    st.markdown("""
-        #### Interpretasi:
-        - Model menunjukkan performa yang cukup baik dalam menangkap tren harga saham.
-        - Terdapat fluktuasi yang masih bisa diperbaiki pada komponen residual.
-
-        #### Saran:
-        - Lakukan tuning parameter pada model.
-        - Pertimbangkan faktor eksternal seperti berita pasar atau sentimen investor.
-        - Gunakan model lanjutan seperti **Mixture Autoregressive (MAR)** untuk data yang memiliki switching regime.
-    """)
