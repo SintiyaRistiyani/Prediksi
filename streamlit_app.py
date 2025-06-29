@@ -200,7 +200,7 @@ elif menu == "Stasioneritas":
 
 # ----------------- Halaman Model -----------------
 elif menu == "Model":
-    st.title("🔧 Pemodelan")
+    st.title("🔧 Pemodelan MAR")
 
     if 'log_return' not in st.session_state or 'selected_price_col' not in st.session_state:
         st.warning("Silakan lakukan preprocessing terlebih dahulu untuk mendapatkan log return.")
@@ -209,40 +209,10 @@ elif menu == "Model":
     log_return = st.session_state['log_return']
     selected_col = st.session_state['selected_price_col']
 
-    st.markdown("### 📌 Pilih Model yang Ingin Digunakan")
-    model_type = st.radio("Pilih jenis model:", ["ARIMA", "Mixture Autoregressive (MAR)"])
-    st.session_state['model_type'] = model_type
+    st.markdown("### 📌 Pilih Distribusi untuk Model MAR")
+    dist_type = st.radio("Distribusi komponen MAR", ["Normal", "GED"])
+    st.session_state['model_type'] = f"MAR-{dist_type}"
 
-    # --------------------- ARIMA ---------------------
-    if model_type == "ARIMA":
-        st.markdown("### ⚙️ Parameter ARIMA (p, d, q)")
-        p = st.number_input("p (Autoregressive term)", min_value=0, value=1, step=1)
-        d = st.number_input("d (Differencing term)", min_value=0, value=0, step=1)
-        q = st.number_input("q (Moving average term)", min_value=0, value=1, step=1)
-
-        if st.button("🚀 Jalankan Model ARIMA"):
-            from statsmodels.tsa.arima.model import ARIMA
-            import warnings
-            warnings.filterwarnings("ignore")
-
-            st.markdown("⏳ Melatih model ARIMA...")
-            try:
-                model = ARIMA(log_return, order=(p, d, q))
-                model_fit = model.fit()
-
-                st.session_state['arima_model'] = model_fit
-                pred = model_fit.predict()
-                st.session_state['arima_pred'] = pred
-
-                st.success("✅ Model ARIMA berhasil dilatih!")
-                st.markdown("### 📋 Ringkasan Model")
-                st.text(model_fit.summary())
-
-            except Exception as e:
-                st.error(f"❌ Gagal melatih model ARIMA: {e}")
-
-    # --------------------- MAR ---------------------
-elif model_type == "Mixture Autoregressive (MAR)":
     st.markdown("### ⚙️ Pilih Metode Pelatihan Model MAR")
 
     mar_method = st.radio("Pilih metode pelatihan:", [
@@ -254,11 +224,11 @@ elif model_type == "Mixture Autoregressive (MAR)":
         k = st.number_input("Jumlah Komponen (k)", min_value=1, value=2, step=1)
         p = st.number_input("Order AR (p)", min_value=1, value=1, step=1)
 
-        if st.button("🚀 Jalankan EM untuk MAR (GED)"):
+        if st.button("🚀 Jalankan EM untuk MAR"):
             try:
+                import numpy as np
                 from numpy.linalg import inv
                 from scipy.special import gamma
-                import numpy as np
 
                 def ged_pdf(x, mu, sigma, nu):
                     beta = sigma * (gamma(1/nu) / gamma(3/nu))**0.5
@@ -266,48 +236,67 @@ elif model_type == "Mixture Autoregressive (MAR)":
                     z = np.abs((x - mu) / beta)
                     return coeff * np.exp(-z**nu)
 
-                log_ret = st.session_state['log_return'].dropna().values
+                def normal_pdf(x, mu, sigma):
+                    return (1 / (np.sqrt(2 * np.pi) * sigma)) * np.exp(-0.5 * ((x - mu) / sigma)**2)
+
+                log_ret = log_return.dropna().values
+                if len(log_ret) <= p:
+                    st.error("Data log return terlalu sedikit untuk order p yang dipilih.")
+                    st.stop()
+
+                # Siapkan X dan Y
                 X = np.column_stack([log_ret[i:-(p - i)] for i in range(p)])
                 Y = log_ret[p:]
                 n = len(Y)
 
+                # Inisialisasi parameter
                 np.random.seed(42)
                 pis = np.full(k, 1/k)
                 betas = [np.random.randn(p) for _ in range(k)]
                 sigmas = np.full(k, np.std(Y))
-                nus = np.full(k, 2.0)  # GED shape parameter (ν)
+                nus = np.full(k, 2.0) if dist_type == "GED" else None
 
                 max_iter = 100
                 for _ in range(max_iter):
                     gamma_mat = np.zeros((n, k))
                     for j in range(k):
                         mu = X @ betas[j]
-                        gamma_mat[:, j] = pis[j] * ged_pdf(Y, mu, sigmas[j], nus[j])
+                        if dist_type == "GED":
+                            gamma_mat[:, j] = pis[j] * ged_pdf(Y, mu, sigmas[j], nus[j])
+                        else:
+                            gamma_mat[:, j] = pis[j] * normal_pdf(Y, mu, sigmas[j])
                     gamma_mat /= gamma_mat.sum(axis=1, keepdims=True)
 
                     pis = gamma_mat.mean(axis=0)
                     for j in range(k):
                         W = np.diag(gamma_mat[:, j])
-                        XW = X.T @ W
-                        betas[j] = inv(XW @ X) @ XW @ Y
+                        try:
+                            XW = X.T @ W
+                            betas[j] = inv(XW @ X) @ XW @ Y
+                        except np.linalg.LinAlgError:
+                            st.error("❌ Matriks singular saat update koefisien. Coba ubah k atau p.")
+                            st.stop()
+
                         residual = Y - X @ betas[j]
                         sigmas[j] = np.sqrt((gamma_mat[:, j] * residual**2).sum() / gamma_mat[:, j].sum())
 
                 st.session_state['mar_model'] = {
-                    'pis': pis, 'betas': betas, 'sigmas': sigmas, 'nus': nus,
-                    'k': k, 'p': p
+                    'pis': pis, 'betas': betas, 'sigmas': sigmas,
+                    'nus': nus if dist_type == "GED" else None,
+                    'k': k, 'p': p, 'dist': dist_type
                 }
 
-                st.success("✅ MAR (GED) berhasil dilatih dengan EM!")
+                st.success(f"✅ Model MAR-{dist_type} berhasil dilatih dengan EM!")
                 for j in range(k):
                     st.markdown(f"#### Komponen {j+1}")
                     st.write(f"Koefisien AR: {betas[j]}")
                     st.write(f"σ²: {sigmas[j]**2:.6f}")
                     st.write(f"Proporsi: {pis[j]:.4f}")
-                    st.write(f"ν (shape): {nus[j]:.2f}")
+                    if dist_type == "GED":
+                        st.write(f"ν (shape): {nus[j]:.2f}")
 
             except Exception as e:
-                st.error(f"Gagal saat EM training: {e}")
+                st.error(f"Gagal saat pelatihan EM: {e}")
 
     elif mar_method == "Masukkan Parameter Manual":
         st.markdown("#### ✍️ Masukkan Parameter MAR secara Manual")
@@ -317,14 +306,14 @@ elif model_type == "Mixture Autoregressive (MAR)":
         betas = []
         sigmas = []
         pis = []
-        nus = []
+        nus = [] if dist_type == "GED" else None
 
         for i in range(k):
             st.markdown(f"##### Komponen {i+1}")
             beta_input = st.text_input(f"Koefisien AR (pisahkan dengan koma) Komponen {i+1}", value="0.5")
             sigma_input = st.number_input(f"Sigma Komponen {i+1}", value=0.1)
             pi_input = st.number_input(f"Proporsi Komponen {i+1}", min_value=0.0, max_value=1.0, value=1/k)
-            nu_input = st.number_input(f"GED Shape ν Komponen {i+1}", min_value=1.0, value=2.0)
+            nu_input = st.number_input(f"GED Shape ν Komponen {i+1}", min_value=1.0, value=2.0) if dist_type == "GED" else None
 
             beta_array = np.fromstring(beta_input, sep=',')
             if len(beta_array) != p:
@@ -334,7 +323,8 @@ elif model_type == "Mixture Autoregressive (MAR)":
             betas.append(beta_array)
             sigmas.append(sigma_input)
             pis.append(pi_input)
-            nus.append(nu_input)
+            if dist_type == "GED":
+                nus.append(nu_input)
 
         if st.button("🚀 Simpan Parameter MAR Manual"):
             pis = np.array(pis)
@@ -344,9 +334,10 @@ elif model_type == "Mixture Autoregressive (MAR)":
                 'pis': pis,
                 'betas': betas,
                 'sigmas': sigmas,
-                'nus': nus,
+                'nus': nus if dist_type == "GED" else None,
                 'k': k,
-                'p': p
+                'p': p,
+                'dist': dist_type
             }
 
             st.success("✅ Parameter MAR berhasil disimpan!")
@@ -355,7 +346,8 @@ elif model_type == "Mixture Autoregressive (MAR)":
                 st.write(f"Koefisien AR: {betas[j]}")
                 st.write(f"σ²: {sigmas[j]**2:.6f}")
                 st.write(f"Proporsi: {pis[j]:.4f}")
-                st.write(f"ν (shape): {nus[j]:.2f}")
+                if dist_type == "GED":
+                    st.write(f"ν (shape): {nus[j]:.2f}")
                     
 # ----------------- Halaman Prediksi dan Visualisasi -----------------
 elif menu == "Prediksi dan Visualisasi":
