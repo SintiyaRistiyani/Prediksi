@@ -461,3 +461,58 @@ elif menu == "Prediksi dan Visualisasi":
     st.markdown("### ✅ Evaluasi Akurasi (MAPE Harga)")
     mape = mean_absolute_percentage_error(df_pred["Harga Aktual"], df_pred["Harga Prediksi"])
     st.write(f"**MAPE (Mean Absolute Percentage Error):** {mape:.2f}%")
+    
+# ----------------- Halaman Interpretasi dan Saran -----------------
+elif menu == "Interpretasi dan Saran":
+    st.title("📝 Interpretasi dan Saran")
+
+    if 'model_type' not in st.session_state or 'log_return' not in st.session_state:
+        st.warning("Model belum dilatih.")
+        st.stop()
+
+    model_type = st.session_state['model_type']
+    mape = None
+
+    # Ambil MAPE jika tersedia
+    if 'mar_model' in st.session_state and 'df_pred' in st.session_state:
+        from numpy import mean, abs
+        df_pred = st.session_state['df_pred']
+        mape = mean(abs((df_pred["Harga Aktual"] - df_pred["Harga Prediksi"]) / df_pred["Harga Aktual"])) * 100
+
+    st.markdown("### 🔎 Interpretasi Model")
+
+    if model_type.startswith("MAR"):
+        st.markdown(f"""
+        - Model yang digunakan: **{model_type}**
+        - Model ini mengasumsikan bahwa perilaku harga saham berasal dari beberapa **rejim dinamis berbeda** (komponen campuran).
+        - Setiap komponen memiliki parameter AR dan distribusi tersendiri.
+        - Model cocok untuk data harga saham yang mengalami perubahan pola secara periodik, volatil, atau nonlinear.
+        """)
+    else:
+        st.markdown("- Model belum dikenali.")
+
+    if mape is not None:
+        st.markdown(f"**Evaluasi Kinerja:** MAPE = `{mape:.2f}%`")
+
+        if mape < 10:
+            st.success("🎯 Prediksi sangat akurat.")
+        elif mape < 20:
+            st.info("📈 Prediksi cukup baik.")
+        else:
+            st.warning("⚠️ Prediksi masih bisa ditingkatkan.")
+
+    st.markdown("### 💡 Saran untuk Peningkatan")
+
+    st.markdown("""
+    - 🔁 **Lakukan tuning parameter** (jumlah komponen, order AR) berdasarkan nilai BIC/AIC.
+    - 🔍 **Analisis residual**: pastikan tidak ada pola sisa signifikan.
+    - 📉 **Gunakan log return** untuk menstabilkan varians dan mengurangi efek outlier.
+    - 📰 Pertimbangkan memasukkan **variabel eksternal** seperti sentimen pasar, indeks global, atau berita ekonomi.
+    - 🔬 Untuk jangka panjang, eksplorasi model yang lebih kompleks seperti:
+        - HMM-AR (Hidden Markov Model Autoregressive)
+        - Regime-Switching Models
+        - DeepAR atau model LSTM.
+    """)
+
+    st.markdown("---")
+    st.info("💾 Jangan lupa simpan hasil model dan prediksi Anda untuk analisis lanjutan.")
