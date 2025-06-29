@@ -159,7 +159,6 @@ elif menu == "Data Preprocessing":
 elif menu == "Stasioneritas":
     st.title("📉 Uji Stasioneritas (ADF Test - Log Return)")
 
-    # Validasi apakah log return tersedia
     if 'log_return' not in st.session_state or 'selected_price_col' not in st.session_state:
         st.warning("Silakan lakukan preprocessing terlebih dahulu agar log return tersedia.")
         st.stop()
@@ -170,28 +169,34 @@ elif menu == "Stasioneritas":
     st.markdown(f"Kolom yang dianalisis: **{selected_col}**")
     st.markdown("Uji stasioneritas dilakukan terhadap **log return** dari data harga saham.")
 
-    # Siapkan dataframe log return untuk uji ADF
-    df_test = pd.DataFrame(log_return, columns=[selected_col])
+    # Visualisasi log return
+    st.markdown("### 🔍 Visualisasi Log Return")
+    st.line_chart(log_return)
 
-    # Fungsi ADF Test
+    # Siapkan dataframe log return untuk ADF test
+    df_test = pd.DataFrame({selected_col: log_return.values}, index=log_return.index)
+
     from statsmodels.tsa.stattools import adfuller
     result = adfuller(df_test[selected_col].dropna())
 
-    # Tampilkan hasil
-    st.markdown("""
-    **Hasil Uji ADF (Augmented Dickey-Fuller):**
-    - **ADF Statistic**: {:.4f}  
-    - **p-value**: {:.4f}  
-    - **Critical Values**:
-    """.format(result[0], result[1]))
+    # Tampilkan hasil ADF
+    st.markdown("### 📋 Hasil Uji ADF (Augmented Dickey-Fuller)")
+    st.markdown(f"""
+    - **ADF Statistic**: `{result[0]:.4f}`  
+    - **p-value**: `{result[1]:.4f}`
+    - **Lags Used**: `{result[2]}`
+    - **Jumlah Observasi Efektif**: `{result[3]}`
+    """)
+
+    st.markdown("**Critical Values:**")
     for key, value in result[4].items():
-        st.markdown(f"- {key}: {value:.4f}")
+        st.markdown(f"- `{key}`: `{value:.4f}`")
 
     # Interpretasi
     if result[1] < 0.05:
-        st.success("✅ Log return stasioner (tolak H0 - tidak ada akar unit).")
+        st.success("✅ Log return **stasioner** (p-value < 0.05 → tolak H0: tidak ada akar unit).")
     else:
-        st.error("❌ Log return tidak stasioner (gagal tolak H0 - ada akar unit).")
+        st.error("❌ Log return **tidak stasioner** (p-value ≥ 0.05 → gagal tolak H0: ada akar unit).")
 
 # ----------------- Halaman Model -----------------
 elif menu == "Model":
