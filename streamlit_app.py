@@ -353,19 +353,25 @@ elif menu == "Model":
 elif menu == "Prediksi dan Visualisasi":
     st.title("📊 Prediksi dan Visualisasi")
 
-    if 'model_type' not in st.session_state or 'log_return' not in st.session_state:
+    if 'model_type' not in st.session_state or 'log_return' not in st.session_state or 'df' not in st.session_state:
         st.warning("Model belum dilatih atau log return tidak tersedia.")
         st.stop()
 
     model_type = st.session_state['model_type']
     log_return = st.session_state['log_return'].dropna()
-    st.markdown(f"### 🔮 Hasil Prediksi Menggunakan Model: **{model_type}**")
+    df = st.session_state['df']
+    selected_col = st.session_state['selected_price_col']
 
+    st.markdown(f"### 🔮 Hasil Prediksi Harga Menggunakan Model: **{model_type}**")
+    
     forecast_steps = st.number_input("Masukkan jumlah langkah prediksi ke depan:", min_value=1, value=10, step=1)
 
     def mean_absolute_percentage_error(y_true, y_pred):
         y_true, y_pred = np.array(y_true), np.array(y_pred)
         return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+
+    # Ambil harga terakhir sebelum prediksi
+    last_price = df[selected_col].dropna().iloc[-1]
 
     # ----------------- Prediksi dengan MAR -----------------
     if model_type.startswith("MAR"):
@@ -377,59 +383,81 @@ elif menu == "Prediksi dan Visualisasi":
         pis = model['pis']
         betas = model['betas']
         sigmas = model['sigmas']
-        nus = model['nus']
+        nus = model.get('nus', [2.0] * len(pis))  # default jika normal
         k = model['k']
         p = model['p']
-        dist = model['dist']
+        dist = model.get('dist', 'normal')
 
         data = log_return.values
         if len(data) <= p:
             st.error("Data tidak cukup untuk membuat prediksi MAR dengan order p.")
             st.stop()
 
-        # Prediksi in-sample (sepanjang data tersedia)
+        # Prediksi in-sample (log return)
         X_pred = np.column_stack([data[i:len(data)-(p - i)] for i in range(p)])
-        y_actual = data[p:]
+        y_actual_log = data[p:]
         pred_len = len(X_pred)
 
-        y_pred = np.zeros(pred_len)
+        y_pred_log = np.zeros(pred_len)
         for j in range(k):
-            y_pred += pis[j] * (X_pred @ betas[j])
+            y_pred_log += pis[j] * (X_pred @ betas[j])
+
+        # Transformasi log return -> harga
+        price_actual = [df[selected_col].dropna().iloc[p-1]]
+        for r in y_actual_log:
+            price_actual.append(price_actual[-1] * np.exp(r))
+        price_actual = price_actual[1:]
+
+        price_pred = [df[selected_col].dropna().iloc[p-1]]
+        for r in y_pred_log:
+            price_pred.append(price_pred[-1] * np.exp(r))
+        price_pred = price_pred[1:]
+
+        index_pred = df[selected_col].dropna().index[p:]
 
         df_pred = pd.DataFrame({
-            "Aktual": y_actual,
-            "Prediksi": y_pred
-        }, index=log_return.index[p:]).dropna()
+            "Harga Aktual": price_actual,
+            "Harga Prediksi": price_pred
+        }, index=index_pred)
 
-        # Prediksi ke depan (out-of-sample)
-        last_values = data[-p:].copy()
-        forecast = []
+        # ----------------- Prediksi ke Depan (Out-of-Sample) -----------------
+        last_log_values = data[-p:].copy()
+        forecast_log = []
 
         for _ in range(forecast_steps):
             step_pred = 0
             for j in range(k):
-                ar_input = last_values[-p:]
-                step_pred += pis[j] * (betas[j] @ ar_input)
-            forecast.append(step_pred)
-            last_values = np.append(last_values, step_pred)[-p:]
+                step_pred += pis[j] * (betas[j] @ last_log_values[-p:])
+            forecast_log.append(step_pred)
+            last_log_values = np.append(last_log_values, step_pred)[-p:]
 
-        st.markdown("### 🔮 Prediksi Out-of-Sample")
-        st.line_chart(pd.Series(forecast, name="Prediksi ke depan"))
+        # Transformasi forecast log return → harga
+        future_prices = [last_price]
+        for r in forecast_log:
+            future_prices.append(future_prices[-1] * np.exp(r))
+        future_prices = future_prices[1:]
+
+        st.markdown("### 🔮 Prediksi Harga Out-of-Sample")
+        future_index = pd.date_range(start=df.index[-1], periods=forecast_steps+1, freq='D')[1:]
+        df_future = pd.DataFrame({
+            "Prediksi Harga": future_prices
+        }, index=future_index)
+
+        st.line_chart(df_future)
 
     else:
         st.error("Model yang dipilih tidak didukung.")
         st.stop()
 
     # ----------------- Visualisasi -----------------
-    st.markdown("### 📈 Visualisasi Prediksi vs Aktual")
+    st.markdown("### 📈 Visualisasi Harga Aktual vs Harga Prediksi (In-sample)")
     st.line_chart(df_pred)
 
     # ----------------- Tabel Prediksi -----------------
-    st.markdown("### 📋 Tabel Hasil Prediksi (10 Baris Terakhir)")
+    st.markdown("### 📋 Tabel Hasil Prediksi Harga (10 Baris Terakhir)")
     st.dataframe(df_pred.tail(10))
 
     # ----------------- Evaluasi -----------------
-    st.markdown("### ✅ Evaluasi Akurasi (MAPE)")
-    mape = mean_absolute_percentage_error(df_pred["Aktual"], df_pred["Prediksi"])
+    st.markdown("### ✅ Evaluasi Akurasi (MAPE Harga)")
+    mape = mean_absolute_percentage_error(df_pred["Harga Aktual"], df_pred["Harga Prediksi"])
     st.write(f"**MAPE (Mean Absolute Percentage Error):** {mape:.2f}%")
-
