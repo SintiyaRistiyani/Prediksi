@@ -464,55 +464,48 @@ elif menu == "Prediksi dan Visualisasi":
     
 # ----------------- Halaman Interpretasi dan Saran -----------------
 elif menu == "Interpretasi dan Saran":
-    st.title("📝 Interpretasi dan Saran")
+    st.title("📌 Interpretasi dan Saran")
 
-    if 'model_type' not in st.session_state or 'log_return' not in st.session_state:
-        st.warning("Model belum dilatih.")
-        st.stop()
+    st.markdown("## 📈 Ringkasan Kinerja Model")
+    for saham in stock_names:  # contoh: ['GUDANG GARAM', 'SAMPOERNA', 'WISMILAK']
+        st.subheader(f"📊 {saham}")
 
-    model_type = st.session_state['model_type']
-    mape = None
+        # Ambil metrik dari session_state
+        model_used = st.session_state.get(f"{saham}_model_type", "N/A")
+        mape = st.session_state.get(f"{saham}_mape", None)
+        loglik = st.session_state.get(f"{saham}_loglik", None)
 
-    # Ambil MAPE jika tersedia
-    if 'mar_model' in st.session_state and 'df_pred' in st.session_state:
-        from numpy import mean, abs
-        df_pred = st.session_state['df_pred']
-        mape = mean(abs((df_pred["Harga Aktual"] - df_pred["Harga Prediksi"]) / df_pred["Harga Aktual"])) * 100
-
-    st.markdown("### 🔎 Interpretasi Model")
-
-    if model_type.startswith("MAR"):
-        st.markdown(f"""
-        - Model yang digunakan: **{model_type}**
-        - Model ini mengasumsikan bahwa perilaku harga saham berasal dari beberapa **rejim dinamis berbeda** (komponen campuran).
-        - Setiap komponen memiliki parameter AR dan distribusi tersendiri.
-        - Model cocok untuk data harga saham yang mengalami perubahan pola secara periodik, volatil, atau nonlinear.
-        """)
-    else:
-        st.markdown("- Model belum dikenali.")
-
-    if mape is not None:
-        st.markdown(f"**Evaluasi Kinerja:** MAPE = `{mape:.2f}%`")
-
-        if mape < 10:
-            st.success("🎯 Prediksi sangat akurat.")
-        elif mape < 20:
-            st.info("📈 Prediksi cukup baik.")
-        else:
-            st.warning("⚠️ Prediksi masih bisa ditingkatkan.")
-
-    st.markdown("### 💡 Saran untuk Peningkatan")
-
-    st.markdown("""
-    - 🔁 **Lakukan tuning parameter** (jumlah komponen, order AR) berdasarkan nilai BIC/AIC.
-    - 🔍 **Analisis residual**: pastikan tidak ada pola sisa signifikan.
-    - 📉 **Gunakan log return** untuk menstabilkan varians dan mengurangi efek outlier.
-    - 📰 Pertimbangkan memasukkan **variabel eksternal** seperti sentimen pasar, indeks global, atau berita ekonomi.
-    - 🔬 Untuk jangka panjang, eksplorasi model yang lebih kompleks seperti:
-        - HMM-AR (Hidden Markov Model Autoregressive)
-        - Regime-Switching Models
-        - DeepAR atau model LSTM.
-    """)
+        # Tampilkan hasil evaluasi
+        st.markdown(f"**Model yang digunakan:** {model_used}")
+        if mape is not None:
+            st.markdown(f"**MAPE:** {mape:.2f}%")
+        if loglik is not None:
+            st.markdown(f"**Log-Likelihood:** {loglik:.2f}")
+        
+        # Rekomendasi sederhana berdasarkan MAPE
+        if mape is not None:
+            if mape < 5:
+                st.success("✅ Model memiliki akurasi sangat baik untuk prediksi jangka pendek.")
+            elif mape < 10:
+                st.info("ℹ️ Model cukup baik, meskipun masih dapat ditingkatkan.")
+            else:
+                st.warning("⚠️ Akurasi masih perlu ditingkatkan. Pertimbangkan pemodelan ulang.")
 
     st.markdown("---")
-    st.info("💾 Jangan lupa simpan hasil model dan prediksi Anda untuk analisis lanjutan.")
+    st.markdown("## 💡 Saran Pengembangan")
+
+    st.markdown("""
+    - Coba bandingkan performa model ARIMA dan MAR secara menyeluruh, tidak hanya dari MAPE tapi juga dari log-likelihood dan visualisasi tren.
+    - Gunakan validasi silang (cross-validation) pada data time series untuk menghindari overfitting.
+    - Tambahkan eksternal variabel (seperti IHSG, inflasi, nilai tukar) jika ingin membangun model regresi multivariat (misalnya VAR atau MAR multivariat).
+    - Untuk jangka panjang, pertimbangkan model machine learning seperti LSTM jika data lebih banyak tersedia.
+    """)
+
+    st.markdown("## 🗂️ Dokumentasi dan Referensi")
+    st.markdown("""
+    - Rasyid (2018). *Model Autoregressive dengan Distribusi Student-t dan Generalized Error Distribution untuk Prediksi Harga Saham.*
+    - Historini (2010). *Model Mixture Autoregressive untuk Peramalan Deret Waktu Keuangan.*
+    - Asrini (2013). *Analisis Peramalan Harga Saham dengan Model MAR.*
+    """)
+
+    st.markdown("Terima kasih telah menggunakan aplikasi ini. 🙏")
