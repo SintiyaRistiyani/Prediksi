@@ -594,7 +594,7 @@ if menu == "Uji Signifikansi dan Residual":
 if menu == "Prediksi dan Visualisasi":
     st.title("📈 Prediksi dan Visualisasi Harga Saham")
 
-    if 'model_type' not in st.session_state or 'log_return' not in st.session_state or 'original_df' not in st.session_state or 'selected_col' not in st.session_state:
+    if 'model_type' not in st.session_state or 'log_return' not in st.session_state or 'original_df' not in st.session_state or 'selected_price_col' not in st.session_state:
         st.warning("Pastikan data sudah diproses dan model sudah dilatih.")
         st.stop()
 
