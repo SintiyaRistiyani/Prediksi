@@ -209,6 +209,107 @@ elif menu == "Stasioneritas":
         st.error("❌ Log return **tidak stasioner** (p-value ≥ 0.05 → gagal tolak H0: ada akar unit).")
 
 # ----------------- Halaman Model -----------------
+# --- Inisialisasi parameter MAR-GED ---
+def initialize_parameters_mar_ged(X, p, K):
+    N = len(X)
+    weights = np.full(K, 1 / K)
+    km = KMeans(n_clusters=K, random_state=42).fit(X[p:].reshape(-1, 1))
+    labels = km.labels_
+
+    ar_params = np.zeros((K, p))
+    sigmas = np.zeros(K)
+    betas = np.full(K, 2.0)
+
+    for k in range(K):
+        idx = np.where(labels == k)[0]
+        X_k = np.array([X[i - p:i] for i in idx + p if i >= p])
+        y_k = X[idx + p][idx + p >= p]
+
+        if len(y_k) == 0:
+            ar_params[k] = np.zeros(p)
+            sigmas[k] = np.std(X)
+        else:
+            beta_hat = np.linalg.lstsq(X_k, y_k, rcond=None)[0]
+            residuals = y_k - X_k @ beta_hat
+            ar_params[k] = beta_hat
+            sigmas[k] = np.std(residuals) + 1e-6
+
+    return weights, ar_params, sigmas, betas
+
+# --- EM untuk MAR-GED ---
+def em_mar_ged(X, p, K, max_iter=100, tol=1e-6):
+    N = len(X)
+    X_lagged = np.array([X[i - p:i] for i in range(p, N)])
+    y = X[p:]
+
+    weights, ar_params, sigmas, betas = initialize_parameters_mar_ged(X, p, K)
+    loglik_old = -np.inf
+
+    for iteration in range(max_iter):
+        pdfs = np.zeros((N - p, K))
+        for k in range(K):
+            mu = X_lagged @ ar_params[k]
+            scale = sigmas[k]
+            beta = betas[k]
+            pdfs[:, k] = weights[k] * gennorm.pdf(y, beta, loc=mu, scale=scale)
+
+        responsibilities = pdfs / (pdfs.sum(axis=1, keepdims=True) + 1e-12)
+
+        for k in range(K):
+            r_k = responsibilities[:, k]
+            N_k = r_k.sum()
+            weights[k] = N_k / (N - p)
+
+            W = np.diag(r_k)
+            XWX = X_lagged.T @ W @ X_lagged
+            XWy = X_lagged.T @ W @ y
+            try:
+                ar_params[k] = np.linalg.solve(XWX + 1e-6 * np.eye(p), XWy)
+            except np.linalg.LinAlgError:
+                ar_params[k] = np.zeros(p)
+
+            mu_k = X_lagged @ ar_params[k]
+            residuals = y - mu_k
+            sigmas[k] = np.sqrt(np.sum(r_k * residuals ** 2) / N_k) + 1e-6
+            betas[k] = 2.0  # tetap fixed (bisa dikembangkan jika perlu)
+
+        loglik = np.sum(np.log(pdfs.sum(axis=1) + 1e-12))
+        if abs(loglik - loglik_old) < tol:
+            break
+        loglik_old = loglik
+
+    num_params = (K - 1) + K * (p + 2)
+    bic = -2 * loglik + num_params * np.log(N - p)
+
+    return {
+        'weights': weights,
+        'ar_params': ar_params,
+        'sigmas': sigmas,
+        'beta': betas,
+        'log_likelihood': loglik,
+        'bic': bic
+    }
+
+# --- Cari struktur terbaik MAR-GED ---
+def best_structure_mar_ged(X, max_p=3, max_K=3):
+    best_model = None
+    best_bic = np.inf
+    best_p, best_k = None, None
+
+    for p in range(1, max_p + 1):
+        for K in range(1, max_K + 1):
+            try:
+                model = em_mar_ged(X, p, K)
+                if model['bic'] < best_bic:
+                    best_bic = model['bic']
+                    best_model = model
+                    best_p = p
+                    best_k = K
+            except Exception:
+                continue
+
+    return best_model, best_p, best_k
+
 if menu == "Model":
     st.title("🏗️ Pemodelan Mixture Autoregressive (MAR)")
 
