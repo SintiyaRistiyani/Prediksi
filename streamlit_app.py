@@ -62,7 +62,6 @@ elif menu == "Input Data":
         3. Nilai harga sebaiknya berupa angka tanpa simbol (misal: tanpa `Rp`, `%`, atau pemisah ribuan)
     """)
 
-
     uploaded_file = st.file_uploader("📂 Upload File CSV (delimiter = ';')", type=["csv"])
 
     if uploaded_file:
@@ -148,25 +147,25 @@ elif menu == "Uji Stasioneritas":
         st.warning("Data train belum tersedia. Harap lakukan preprocessing terlebih dahulu.")
         st.stop()
 
-log_return_train = st.session_state['log_return_train']
-st.markdown("### 🧪 Uji ADF (Augmented Dickey-Fuller)")
-adf_result = adfuller(log_return_train)
-st.write(f"ADF Statistic: {adf_result[0]:.4f}")
-st.write(f"p-value: {adf_result[1]:.4f}")
-st.write("Kesimpulan:", "✅ Stasioner" if adf_result[1] < 0.05 else "❌ Tidak Stasioner")
+    log_return_train = st.session_state['log_return_train']
+    st.markdown("### 🧪 Uji ADF (Augmented Dickey-Fuller)")
+    adf_result = adfuller(log_return_train)
+    st.write(f"ADF Statistic: {adf_result[0]:.4f}")
+    st.write(f"p-value: {adf_result[1]:.4f}")
+    st.write("Kesimpulan:", "✅ Stasioner" if adf_result[1] < 0.05 else "❌ Tidak Stasioner")
 
-st.markdown("### 🔁 Plot ACF dan PACF (Train Only)")
+    st.markdown("### 🔁 Plot ACF dan PACF (Train Only)")
 
-fig1, ax1 = plt.subplots()
-plot_acf(log_return_train, ax=ax1, lags=20)
-st.pyplot(fig1)
+    fig1, ax1 = plt.subplots()
+    plot_acf(log_return_train, ax=ax1, lags=20)
+    st.pyplot(fig1)
 
-fig2, ax2 = plt.subplots()
-plot_pacf(log_return_train, ax=ax2, lags=20, method='ywm')
-st.pyplot(fig2)
+    fig2, ax2 = plt.subplots()
+    plot_pacf(log_return_train, ax=ax2, lags=20, method='ywm')
+    st.pyplot(fig2)
 
-# Simpan hasil ke session_state
-st.session_state['stationary_return'] = log_return_train
+    # Simpan hasil ke session_state
+    st.session_state['stationary_return'] = log_return_train
 
 # ----------------- Halaman Model -----------------
 # --- Inisialisasi parameter MAR-Normal ---
