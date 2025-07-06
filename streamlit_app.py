@@ -206,281 +206,419 @@ elif menu == "Stasioneritas":
         st.error("❌ Log return **tidak stasioner** (p-value ≥ 0.05 → gagal tolak H0: ada akar unit).")
 
 # ----------------- Halaman Model -----------------
-elif menu == "Prediksi dan Visualisasi":
-    st.title("📊 Prediksi dan Visualisasi")
+import streamlit as st
+import pandas as pd
+import numpy as np
+from sklearn.cluster import KMeans
+from scipy.stats import gennorm
+import matplotlib.pyplot as plt
 
-    if 'model_type' not in st.session_state or 'log_return' not in st.session_state:
-        st.warning("Model belum dilatih atau data log return tidak tersedia. Silakan jalankan training terlebih dahulu.")
+# ================= Fungsi-fungsi =================
+
+# --- Fungsi Estimasi MAR-Normal ---
+def initialize_parameters_mar_normal(X, p, K):
+    N = len(X)
+    weights = np.full(K, 1 / K)
+    km = KMeans(n_clusters=K, random_state=42).fit(X[p:].reshape(-1, 1))
+    labels = km.labels_
+
+    ar_params = np.zeros((K, p))
+    sigmas = np.zeros(K)
+
+    for k in range(K):
+        idx = np.where(labels == k)[0]
+        X_k = np.array([X[i - p:i] for i in idx + p if i >= p])
+        y_k = X[idx + p][idx + p >= p]
+
+        if len(y_k) == 0:
+            ar_params[k] = np.zeros(p)
+            sigmas[k] = np.std(X)
+        else:
+            beta_hat = np.linalg.lstsq(X_k, y_k, rcond=None)[0]
+            residuals = y_k - X_k @ beta_hat
+            ar_params[k] = beta_hat
+            sigmas[k] = np.std(residuals) + 1e-6
+
+    return weights, ar_params, sigmas
+
+def em_mar_normal(X, p, K, max_iter=100, tol=1e-6):
+    N = len(X)
+    X_lagged = np.array([X[i - p:i] for i in range(p, N)])
+    y = X[p:]
+
+    weights, ar_params, sigmas = initialize_parameters_mar_normal(X, p, K)
+    loglik_old = -np.inf
+
+    for iteration in range(max_iter):
+        pdfs = np.zeros((N - p, K))
+        for k in range(K):
+            mu = X_lagged @ ar_params[k]
+            sigma = sigmas[k]
+            pdfs[:, k] = weights[k] * (1 / (np.sqrt(2 * np.pi) * sigma)) * np.exp(-0.5 * ((y - mu) / sigma) ** 2)
+
+        responsibilities = pdfs / (pdfs.sum(axis=1, keepdims=True) + 1e-12)
+
+        for k in range(K):
+            r_k = responsibilities[:, k]
+            N_k = r_k.sum()
+            weights[k] = N_k / (N - p)
+
+            W = np.diag(r_k)
+            XWX = X_lagged.T @ W @ X_lagged
+            XWy = X_lagged.T @ W @ y
+            try:
+                ar_params[k] = np.linalg.solve(XWX + 1e-6 * np.eye(p), XWy)
+            except np.linalg.LinAlgError:
+                ar_params[k] = np.zeros(p)
+
+            mu_k = X_lagged @ ar_params[k]
+            residuals = y - mu_k
+            sigmas[k] = np.sqrt(np.sum(r_k * residuals ** 2) / N_k) + 1e-6
+
+        loglik = np.sum(np.log(pdfs.sum(axis=1) + 1e-12))
+        if abs(loglik - loglik_old) < tol:
+            break
+        loglik_old = loglik
+
+    num_params = (K - 1) + K * (p + 1)
+    bic = -2 * loglik + num_params * np.log(N - p)
+
+    return {
+        'weights': weights,
+        'ar_params': ar_params,
+        'sigmas': sigmas,
+        'log_likelihood': loglik,
+        'bic': bic
+    }
+
+def best_structure_mar_normal(X, max_p=3, max_K=3):
+    best_model = None
+    best_bic = np.inf
+    best_p, best_k = None, None
+
+    for p in range(1, max_p + 1):
+        for K in range(1, max_K + 1):
+            try:
+                model = em_mar_normal(X, p, K)
+                if model['bic'] < best_bic:
+                    best_bic = model['bic']
+                    best_model = model
+                    best_p = p
+                    best_k = K
+            except Exception:
+                continue
+
+    return best_model, best_p, best_k
+
+# --- Fungsi Estimasi MAR-GED ---
+def initialize_parameters_mar_ged(X, p, K):
+    N = len(X)
+    weights = np.full(K, 1 / K)
+    km = KMeans(n_clusters=K, random_state=42).fit(X[p:].reshape(-1, 1))
+    labels = km.labels_
+
+    ar_params = np.zeros((K, p))
+    sigmas = np.zeros(K)
+    betas = np.full(K, 2.0)
+
+    for k in range(K):
+        idx = np.where(labels == k)[0]
+        X_k = np.array([X[i - p:i] for i in idx + p if i >= p])
+        y_k = X[idx + p][idx + p >= p]
+
+        if len(y_k) == 0:
+            ar_params[k] = np.zeros(p)
+            sigmas[k] = np.std(X)
+        else:
+            beta_hat = np.linalg.lstsq(X_k, y_k, rcond=None)[0]
+            residuals = y_k - X_k @ beta_hat
+            ar_params[k] = beta_hat
+            sigmas[k] = np.std(residuals) + 1e-6
+
+    return weights, ar_params, sigmas, betas
+
+def em_mar_ged(X, p, K, max_iter=100, tol=1e-6):
+    N = len(X)
+    X_lagged = np.array([X[i - p:i] for i in range(p, N)])
+    y = X[p:]
+
+    weights, ar_params, sigmas, betas = initialize_parameters_mar_ged(X, p, K)
+    loglik_old = -np.inf
+
+    for iteration in range(max_iter):
+        pdfs = np.zeros((N - p, K))
+        for k in range(K):
+            mu = X_lagged @ ar_params[k]
+            scale = sigmas[k]
+            beta = betas[k]
+            pdfs[:, k] = weights[k] * gennorm.pdf(y, beta, loc=mu, scale=scale)
+
+        responsibilities = pdfs / (pdfs.sum(axis=1, keepdims=True) + 1e-12)
+
+        for k in range(K):
+            r_k = responsibilities[:, k]
+            N_k = r_k.sum()
+            weights[k] = N_k / (N - p)
+
+            W = np.diag(r_k)
+            XWX = X_lagged.T @ W @ X_lagged
+            XWy = X_lagged.T @ W @ y
+            try:
+                ar_params[k] = np.linalg.solve(XWX + 1e-6 * np.eye(p), XWy)
+            except np.linalg.LinAlgError:
+                ar_params[k] = np.zeros(p)
+
+            mu_k = X_lagged @ ar_params[k]
+            residuals = y - mu_k
+            sigmas[k] = np.sqrt(np.sum(r_k * residuals ** 2) / N_k) + 1e-6
+            betas[k] = 2.0
+
+        loglik = np.sum(np.log(pdfs.sum(axis=1) + 1e-12))
+        if abs(loglik - loglik_old) < tol:
+            break
+        loglik_old = loglik
+
+    num_params = (K - 1) + K * (p + 2)
+    bic = -2 * loglik + num_params * np.log(N - p)
+
+    return {
+        'weights': weights,
+        'ar_params': ar_params,
+        'sigmas': sigmas,
+        'beta': betas,
+        'log_likelihood': loglik,
+        'bic': bic
+    }
+
+def best_structure_mar_ged(X, max_p=3, max_K=3):
+    best_model = None
+    best_bic = np.inf
+    best_p, best_k = None, None
+
+    for p in range(1, max_p + 1):
+        for K in range(1, max_K + 1):
+            try:
+                model = em_mar_ged(X, p, K)
+                if model['bic'] < best_bic:
+                    best_bic = model['bic']
+                    best_model = model
+                    best_p = p
+                    best_k = K
+            except Exception:
+                continue
+
+    return best_model, best_p, best_k
+
+# --- Fungsi Prediksi MAR-Normal ---
+def predict_mar_normal(model, X_init, n_steps=30):
+    ar_params = model['ar_params']
+    weights = model['weights']
+    p = ar_params.shape[1]
+    main_k = np.argmax(weights)
+    phi = ar_params[main_k]
+    preds = []
+    X_curr = list(X_init[-p:])
+    for _ in range(n_steps):
+        x_lag = np.array(X_curr[-p:])[::-1]
+        next_val = np.dot(phi, x_lag)
+        preds.append(next_val)
+        X_curr.append(next_val)
+    return np.array(preds)
+
+# --- Fungsi Prediksi MAR-GED ---
+def predict_mar_ged(model, X_init, n_steps=30):
+    pred = []
+    X_curr = list(X_init[-model['ar_params'].shape[1]:])
+    main_comp = np.argmax(model['weights'])
+    phi = model['ar_params'][main_comp]
+    sigma = model['sigmas'][main_comp]
+    beta = model['beta'][main_comp]
+    np.random.seed(42)
+    for _ in range(n_steps):
+        next_val = np.dot(phi, X_curr[-len(phi):])
+        noise = gennorm.rvs(beta, loc=0, scale=sigma)
+        next_val += noise
+        pred.append(next_val)
+        X_curr.append(next_val)
+    return np.array(pred)
+
+# =================== Halaman ===================
+
+menu = st.sidebar.radio("Pilih Halaman:", [
+    "Home", 
+    "Input Data", 
+    "Preprocessing", 
+    "Stasioneritas", 
+    "Model", 
+    "Prediksi dan Visualisasi", 
+    "Interpretasi dan Saran"
+])
+
+# ================= Home ===================
+if menu == "Home":
+    st.title("📈 Aplikasi Prediksi Harga Saham dengan Model MAR")
+    st.write("Gunakan sidebar untuk navigasi.")
+
+# ================= Input Data ===================
+elif menu == "Input Data":
+    st.title("📥 Input Data CSV")
+    uploaded_file = st.file_uploader("Upload file CSV (delimiter ';')", type=["csv"])
+    if uploaded_file:
+        df = pd.read_csv(uploaded_file, delimiter=';')
+        st.session_state['df'] = df
+        st.success("Data berhasil dimuat!")
+        st.dataframe(df.head())
+
+# ================= Preprocessing ===================
+elif menu == "Preprocessing":
+    st.title("🧹 Preprocessing Data")
+    if 'df' not in st.session_state:
+        st.warning("Upload data dulu di halaman Input Data.")
+        st.stop()
+
+    df = st.session_state['df']
+    st.write(df.columns)
+    price_col = st.selectbox("Pilih kolom harga saham:", df.columns)
+    date_col = st.selectbox("Pilih kolom tanggal:", df.columns)
+
+    df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+    df = df.dropna(subset=[date_col])
+    df = df.sort_values(date_col).reset_index(drop=True)
+
+    # Konversi harga ke numerik jika perlu
+    df[price_col] = pd.to_numeric(df[price_col], errors='coerce')
+
+    # Hitung log return
+    df['Log_Return'] = np.log(df[price_col] / df[price_col].shift(1))
+    df = df.dropna(subset=['Log_Return'])
+
+    st.session_state['df'] = df
+    st.session_state['selected_price_col'] = price_col
+    st.session_state['selected_date_col'] = date_col
+    st.session_state['log_return'] = df['Log_Return']
+
+    st.write(df[[date_col, price_col, 'Log_Return']].head())
+
+# ================= Stasioneritas ===================
+elif menu == "Stasioneritas":
+    st.title("📉 Uji Stasioneritas (ADF Test)")
+    if 'log_return' not in st.session_state:
+        st.warning("Lakukan preprocessing terlebih dahulu.")
+        st.stop()
+
+    log_return = st.session_state['log_return']
+    selected_col = st.session_state['selected_price_col']
+
+    from statsmodels.tsa.stattools import adfuller
+    result = adfuller(log_return)
+
+    st.write(f"ADF Statistic: {result[0]:.4f}")
+    st.write(f"p-value: {result[1]:.4f}")
+    st.write(f"Lags Used: {result[2]}")
+    st.write(f"Number of Observations: {result[3]}")
+
+    st.write("Critical Values:")
+    for k, v in result[4].items():
+        st.write(f"  {k}: {v:.4f}")
+
+    if result[1] < 0.05:
+        st.success("Data log return stasioner (tolak H0)")
+    else:
+        st.warning("Data log return tidak stasioner (gagal tolak H0)")
+
+# ================= Model ===================
+elif menu == "Model":
+    st.title("🏗️ Training Model MAR")
+
+    if 'log_return' not in st.session_state:
+        st.warning("Lakukan preprocessing terlebih dahulu.")
+        st.stop()
+
+    X = st.session_state['log_return'].values
+    model_choice = st.selectbox("Pilih Model:", ["MAR-Normal", "MAR-GED"])
+    max_p = st.slider("Max order p:", 1, 5, 3)
+    max_K = st.slider("Max jumlah komponen K:", 1, 5, 3)
+
+    if st.button("Jalankan Training"):
+        with st.spinner("Sedang melatih model..."):
+            if model_choice == "MAR-Normal":
+                model, best_p, best_k = best_structure_mar_normal(X, max_p, max_K)
+                if model is not None:
+                    st.success(f"Training selesai: p={best_p}, K={best_k}, BIC={model['bic']:.2f}")
+                    st.session_state['best_model'] = model
+                    st.session_state['best_p'] = best_p
+                    st.session_state['best_k'] = best_k
+                    st.session_state['model_type'] = "MAR-Normal"
+                else:
+                    st.error("Training gagal, coba parameter lain.")
+
+            else:  # MAR-GED
+                model, best_p, best_k = best_structure_mar_ged(X, max_p, max_K)
+                if model is not None:
+                    st.success(f"Training selesai: p={best_p}, K={best_k}, BIC={model['bic']:.2f}")
+                    st.session_state['best_model_ged'] = model
+                    st.session_state['best_p_ged'] = best_p
+                    st.session_state['best_k_ged'] = best_k
+                    st.session_state['model_type'] = "MAR-GED"
+                else:
+                    st.error("Training gagal, coba parameter lain.")
+
+# ================= Prediksi dan Visualisasi ===================
+elif menu == "Prediksi dan Visualisasi":
+    st.title("🔮 Prediksi dan Visualisasi")
+
+    if 'model_type' not in st.session_state or 'log_return' not in st.session_state or 'df' not in st.session_state:
+        st.warning("Model atau data belum siap. Pastikan sudah training dan preprocessing.")
         st.stop()
 
     model_type = st.session_state['model_type']
     log_return = st.session_state['log_return'].dropna()
-    selected_col = st.session_state['selected_price_col']
     df = st.session_state['df']
+    selected_col = st.session_state['selected_price_col']
 
-    st.markdown(f"### 🔮 Prediksi Harga dengan **{model_type}**")
+    st.write(f"Model yang digunakan: **{model_type}**")
+
     n_steps = st.number_input("Jumlah langkah prediksi ke depan (hari):", min_value=1, max_value=365, value=30)
 
-    # Tombol Prediksi
-    if st.button("📈 Prediksi"):
-        st.info("⏳ Sedang memproses prediksi...")
+    if st.button("Prediksi"):
+        with st.spinner("Memproses prediksi..."):
+            if model_type == "MAR-Normal":
+                if 'best_model' not in st.session_state:
+                    st.error("Model MAR-Normal belum tersedia.")
+                    st.stop()
+                model = st.session_state['best_model']
+                pred_log_return = predict_mar_normal(model, log_return.values, n_steps=n_steps)
 
-        # Fungsi prediksi MAR-Normal
-        def predict_mar_normal(model, X_init, n_steps=30):
-            ar_params = model['ar_params']
-            weights = model['weights']
-            p = ar_params.shape[1]
-            main_k = np.argmax(weights)
-            phi = ar_params[main_k]
-            preds = []
-            X_curr = list(X_init[-p:])
-            for _ in range(n_steps):
-                x_lag = np.array(X_curr[-p:])[::-1]
-                next_val = np.dot(phi, x_lag)
-                preds.append(next_val)
-                X_curr.append(next_val)
-            return np.array(preds)
+            elif model_type == "MAR-GED":
+                if 'best_model_ged' not in st.session_state:
+                    st.error("Model MAR-GED belum tersedia.")
+                    st.stop()
+                model = st.session_state['best_model_ged']
+                pred_log_return = predict_mar_ged(model, log_return.values, n_steps=n_steps)
 
-        # Fungsi prediksi MAR-GED
-        def predict_mar_ged(model, X_init, n_steps=30):
-            pred = []
-            X_curr = list(X_init[-model['ar_params'].shape[1]:])
-            main_comp = np.argmax(model['weights'])
-            phi = model['ar_params'][main_comp]
-            sigma = model['sigmas'][main_comp]
-            beta = model['beta'][main_comp]
-            np.random.seed(42)
-            for _ in range(n_steps):
-                next_val = np.dot(phi, X_curr[-len(phi):])
-                noise = gennorm.rvs(beta, loc=0, scale=sigma)
-                next_val += noise
-                pred.append(next_val)
-                X_curr.append(next_val)
-            return np.array(pred)
+            else:
+                st.error("Model tidak dikenali.")
+                st.stop()
 
-        # Jalankan prediksi sesuai model
-        if model_type == "MAR-Normal":
-            model = st.session_state['best_model']
-            pred_log_return = predict_mar_normal(model, log_return.values, n_steps=n_steps)
-        elif model_type == "MAR-GED":
-            model = st.session_state['best_model_ged']
-            pred_log_return = predict_mar_ged(model, log_return.values, n_steps=n_steps)
-        else:
-            st.error("Model tidak dikenali.")
-            st.stop()
+            # Konversi log return ke harga
+            last_price = df[selected_col].dropna().iloc[-1]
+            future_prices = [last_price]
+            for r in pred_log_return:
+                future_prices.append(future_prices[-1] * np.exp(r))
+            future_prices = future_prices[1:]
 
-        # Transformasi log-return → harga
-        last_price = df[selected_col].dropna().iloc[-1]
-        future_prices = [last_price]
-        for r in pred_log_return:
-            future_prices.append(future_prices[-1] * np.exp(r))
-        future_prices = future_prices[1:]
+            last_date = df.index[-1]
+            future_dates = pd.date_range(start=last_date, periods=n_steps + 1, freq='D')[1:]
 
-        future_dates = pd.date_range(start=df.index[-1], periods=n_steps + 1, freq='D')[1:]
-        df_future = pd.DataFrame({'Tanggal': future_dates, 'Prediksi Harga': future_prices}).set_index('Tanggal')
+            df_future = pd.DataFrame({'Tanggal': future_dates, 'Prediksi Harga': future_prices}).set_index('Tanggal')
 
-        # Tampilkan hasil
-        st.success("✅ Prediksi selesai!")
-        st.line_chart(df_future)
-        st.dataframe(df_future)
+            st.success("Prediksi selesai!")
+            st.line_chart(df_future)
+            st.dataframe(df_future)
 
-        # Simpan prediksi ke session_state (jika ingin dipakai di halaman lain)
-        st.session_state['prediksi_harga'] = df_future
-        
-# ----------------- Halaman Prediksi dan Visualisasi -----------------
-elif menu == "Prediksi dan Visualisasi":
-    st.title("📊 Prediksi dan Visualisasi")
+            st.session_state['prediksi_harga'] = df_future
 
-    if 'model_type' not in st.session_state or 'log_return' not in st.session_state:
-        st.warning("Model belum dilatih atau log return tidak tersedia.")
-        st.stop()
-
-    model_type = st.session_state['model_type']
-    df = st.session_state['df']
-    log_return = st.session_state['log_return'].dropna()
-    selected_col = st.session_state['selected_price_col']
-
-    st.markdown(f"### 🔮 Prediksi Harga Menggunakan Model: **{model_type}**")
-
-    # Input jumlah langkah prediksi
-    n_steps = st.number_input("Jumlah langkah prediksi ke depan (n_steps):", min_value=1, max_value=365, value=30, step=1)
-
-    # ----------------- Fungsi Prediksi MAR-Normal -----------------
-    def predict_mar_normal(model, X_init, n_steps=30):
-        ar_params = model['ar_params']
-        weights = model['weights']
-        p = ar_params.shape[1]
-
-        # Komponen dominan (komponen dengan bobot terbesar)
-        main_k = np.argmax(weights)
-        phi = ar_params[main_k]
-
-        # Prediksi iteratif
-        preds = []
-        X_curr = list(X_init[-p:])  # ambil p nilai terakhir sebagai input awal
-
-        for _ in range(n_steps):
-            x_lag = np.array(X_curr[-p:])[::-1]  # urutan lag terbaru ke lama
-            next_val = np.dot(phi, x_lag)
-            preds.append(next_val)
-            X_curr.append(next_val)
-
-        return np.array(preds)
-
-    # ----------------- Prediksi -----------------
-# ----------------- Halaman Prediksi dan Visualisasi -----------------
-elif menu == "Prediksi dan Visualisasi":
-    st.title("📊 Prediksi dan Visualisasi")
-
-    if 'model_type' not in st.session_state or 'log_return' not in st.session_state:
-        st.warning("Model belum dilatih atau log return tidak tersedia.")
-        st.stop()
-
-    model_type = st.session_state['model_type']
-    df = st.session_state['df']
-    log_return = st.session_state['log_return'].dropna()
-    selected_col = st.session_state['selected_price_col']
-
-    st.markdown(f"### 🔮 Prediksi Harga Menggunakan Model: **{model_type}**")
-
-    # Input jumlah langkah prediksi
-    n_steps = st.number_input("Jumlah langkah prediksi ke depan (n_steps):", min_value=1, max_value=365, value=30, step=1)
-
-    # ----------------- Fungsi Prediksi MAR-Normal -----------------
-    def predict_mar_normal(model, X_init, n_steps=30):
-        ar_params = model['ar_params']
-        weights = model['weights']
-        p = ar_params.shape[1]
-
-        # Komponen dominan (komponen dengan bobot terbesar)
-        main_k = np.argmax(weights)
-        phi = ar_params[main_k]
-
-        preds = []
-        X_curr = list(X_init[-p:])  # ambil p nilai terakhir sebagai input awal
-
-        for _ in range(n_steps):
-            x_lag = np.array(X_curr[-p:])[::-1]  # urutan lag terbaru ke lama
-            next_val = np.dot(phi, x_lag)
-            preds.append(next_val)
-            X_curr.append(next_val)
-
-        return np.array(preds)
-
-    # ----------------- Fungsi Prediksi MAR-GED -----------------
-    def predict_mar_ged(model, X_init, n_steps=30):
-        pred = []
-        X_curr = list(X_init[-model['ar_params'].shape[1]:])  # gunakan p terakhir
-        main_comp = np.argmax(model['weights'])
-
-        phi = model['ar_params'][main_comp]
-        sigma = model['sigmas'][main_comp]
-        beta = model['beta'][main_comp]
-
-        np.random.seed(42)
-
-        for _ in range(n_steps):
-            next_val = np.dot(phi, X_curr[-len(phi):])
-            noise = gennorm.rvs(beta, loc=0, scale=sigma)
-            next_val += noise
-            pred.append(next_val)
-            X_curr.append(next_val)
-
-        return np.array(pred)
-
-    # ----------------- Prediksi -----------------
-    if model_type == "MAR-Normal":
-        if 'best_model' not in st.session_state or 'best_p' not in st.session_state:
-            st.error("Model MAR-Normal belum tersedia. Jalankan training terlebih dahulu.")
-            st.stop()
-
-        model = st.session_state['best_model']
-        X = log_return.values
-
-        pred_log_return = predict_mar_normal(model, X, n_steps=n_steps)
-
-    elif model_type == "MAR-GED":
-        if 'best_model_ged' not in st.session_state or 'best_p_ged' not in st.session_state:
-            st.error("Model MAR-GED belum tersedia. Jalankan training terlebih dahulu.")
-            st.stop()
-
-        model = st.session_state['best_model_ged']
-        X = log_return.values
-
-        pred_log_return = predict_mar_ged(model, X, n_steps=n_steps)
-
-    else:
-        st.warning("Model tidak dikenali.")
-        st.stop()
-
-    # ----------------- Transformasi log-return → harga -----------------
-    last_price = df[selected_col].dropna().iloc[-1]
-    future_prices = [last_price]
-    for r in pred_log_return:
-        future_prices.append(future_prices[-1] * np.exp(r))
-    future_prices = future_prices[1:]
-
-    # Buat tanggal untuk prediksi
-    last_date = df[df[selected_col].notna()].iloc[-1].name
-    future_dates = pd.date_range(start=last_date, periods=n_steps+1, freq='D')[1:]
-
-    df_future = pd.DataFrame({
-        'Tanggal': future_dates,
-        'Prediksi Harga': future_prices
-    }).set_index('Tanggal')
-
-    # ----------------- Visualisasi -----------------
-    st.markdown("### 📈 Prediksi Harga Ke Depan")
-    st.line_chart(df_future)
-
-    # ----------------- Tabel Prediksi -----------------
-    st.markdown("### 📋 Tabel Hasil Prediksi")
-    st.dataframe(df_future)
-    
-# ----------------- Halaman Interpretasi dan Saran -----------------
+# ================= Interpretasi dan Saran ===================
 elif menu == "Interpretasi dan Saran":
     st.title("📌 Interpretasi dan Saran")
-
-    st.markdown("## 📈 Ringkasan Kinerja Model")
-    for saham in stock_names:  # contoh: ['GUDANG GARAM', 'SAMPOERNA', 'WISMILAK']
-        st.subheader(f"📊 {saham}")
-
-        # Ambil metrik dari session_state
-        model_used = st.session_state.get(f"{saham}_model_type", "N/A")
-        mape = st.session_state.get(f"{saham}_mape", None)
-        loglik = st.session_state.get(f"{saham}_loglik", None)
-
-        # Tampilkan hasil evaluasi
-        st.markdown(f"**Model yang digunakan:** {model_used}")
-        if mape is not None:
-            st.markdown(f"**MAPE:** {mape:.2f}%")
-        if loglik is not None:
-            st.markdown(f"**Log-Likelihood:** {loglik:.2f}")
-        
-        # Rekomendasi sederhana berdasarkan MAPE
-        if mape is not None:
-            if mape < 5:
-                st.success("✅ Model memiliki akurasi sangat baik untuk prediksi jangka pendek.")
-            elif mape < 10:
-                st.info("ℹ️ Model cukup baik, meskipun masih dapat ditingkatkan.")
-            else:
-                st.warning("⚠️ Akurasi masih perlu ditingkatkan. Pertimbangkan pemodelan ulang.")
-
-    st.markdown("---")
-    st.markdown("## 💡 Saran Pengembangan")
-
-    st.markdown("""
-    - Coba bandingkan performa model ARIMA dan MAR secara menyeluruh, tidak hanya dari MAPE tapi juga dari log-likelihood dan visualisasi tren.
-    - Gunakan validasi silang (cross-validation) pada data time series untuk menghindari overfitting.
-    - Tambahkan eksternal variabel (seperti IHSG, inflasi, nilai tukar) jika ingin membangun model regresi multivariat (misalnya VAR atau MAR multivariat).
-    - Untuk jangka panjang, pertimbangkan model machine learning seperti LSTM jika data lebih banyak tersedia.
-    """)
-
-    st.markdown("## 🗂️ Dokumentasi dan Referensi")
-    st.markdown("""
-    - Rasyid (2018). *Model Autoregressive dengan Distribusi Student-t dan Generalized Error Distribution untuk Prediksi Harga Saham.*
-    - Historini (2010). *Model Mixture Autoregressive untuk Peramalan Deret Waktu Keuangan.*
-    - Asrini (2013). *Analisis Peramalan Harga Saham dengan Model MAR.*
-    """)
-
-    st.markdown("Terima kasih telah menggunakan aplikasi ini. 🙏")
+    st.write("Isi interpretasi dan saran di sini sesuai kebutuhan.")
