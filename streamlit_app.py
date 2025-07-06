@@ -594,18 +594,24 @@ if menu == "Uji Signifikansi dan Residual":
 
 # ----------------- Halaman Prediksi dan Visualisasi -----------------
 if menu == "Prediksi dan Visualisasi":
-    st.title("📈 Prediksi dan Visualisasi Harga")
+    st.title("📈 Prediksi dan Visualisasi Harga Saham")
 
-    if 'model_type' not in st.session_state or 'log_return' not in st.session_state or 'original_df' not in st.session_state:
-        st.warning("Pastikan data sudah di-preprocessing dan model sudah dilatih.")
+    if 'model_type' not in st.session_state or 'log_return' not in st.session_state or 'original_df' not in st.session_state or 'selected_col' not in st.session_state:
+        st.warning("Pastikan data sudah diproses dan model sudah dilatih.")
         st.stop()
 
     model_type = st.session_state['model_type']
     log_return = st.session_state['log_return']
     df = st.session_state['original_df']
-    harga_terakhir = df.iloc[-1][st.session_state['selected_col']]
+    selected_col = st.session_state['selected_col']
 
-    n_steps = st.slider("Jumlah Hari Prediksi:", 5, 60, 30)
+    if selected_col not in df.columns:
+        st.error("Kolom harga tidak ditemukan dalam data asli.")
+        st.stop()
+
+    harga_terakhir = df.iloc[-1][selected_col]
+
+    n_steps = st.slider("🔢 Jumlah Hari Prediksi:", 5, 60, 30)
 
     if st.button("🔮 Prediksi"):
         with st.spinner("Melakukan prediksi..."):
@@ -616,23 +622,26 @@ if menu == "Prediksi dan Visualisasi":
                 model = st.session_state['best_model_ged']
                 pred_log_return = predict_mar_ged(model, log_return.values, n_steps=n_steps)
 
-            pred_log_return = np.array(pred_log_return)
+            # Hitung harga dari log return
             harga_prediksi = [harga_terakhir]
             for r in pred_log_return:
                 harga_prediksi.append(harga_prediksi[-1] * np.exp(r))
-            harga_prediksi = harga_prediksi[1:]
+            harga_prediksi = harga_prediksi[1:]  # buang harga awal
 
-            tanggal_mulai = df.index[-1]
-            tanggal_prediksi = pd.date_range(start=tanggal_mulai + pd.Timedelta(days=1), periods=n_steps, freq='B')
+            tanggal_awal = df.index[-1]
+            tanggal_prediksi = pd.date_range(start=tanggal_awal + pd.Timedelta(days=1), periods=n_steps, freq='B')
 
             df_prediksi = pd.DataFrame({
                 'Tanggal': tanggal_prediksi,
-                'Prediksi Harga': harga_prediksi,
-                'Log Return': pred_log_return
+                'Log Return': pred_log_return,
+                'Prediksi Harga': harga_prediksi
             })
 
             st.line_chart(df_prediksi.set_index('Tanggal')['Prediksi Harga'])
-            st.dataframe(df_prediksi)
+            st.dataframe(df_prediksi.style.format({
+                'Log Return': '{:.6f}',
+                'Prediksi Harga': 'Rp{:,.2f}'
+            }))
 
             csv = df_prediksi.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Unduh Hasil Prediksi", data=csv, file_name='prediksi_harga.csv', mime='text/csv')
