@@ -587,6 +587,8 @@ if menu == "Uji Signifikansi dan Residual":
 
     df_residual = pd.DataFrame(residual_results)
     st.dataframe(df_residual)
+    st.session_state['uji_signif'] = df_signif
+    st.session_state['uji_residual'] = df_residual
 
 # ----------------- Halaman Prediksi dan Visualisasi -----------------
 if menu == "Prediksi dan Visualisasi":
@@ -633,14 +635,23 @@ if menu == "Prediksi dan Visualisasi":
                 'Prediksi Harga': harga_prediksi
             })
 
+            # ⬅️ Tambahkan penyimpanan hasil ke session_state
+            st.session_state['hasil_prediksi'] = df_prediksi
+            st.session_state['n_steps_prediksi'] = n_steps
+            st.session_state['pred_log_return'] = pred_log_return
+            st.session_state['pred_harga'] = harga_prediksi
+
+            # Visualisasi & tabel
             st.line_chart(df_prediksi.set_index('Tanggal')['Prediksi Harga'])
             st.dataframe(df_prediksi.style.format({
                 'Log Return': '{:.6f}',
                 'Prediksi Harga': 'Rp{:,.2f}'
             }))
 
+            # Tombol Unduh
             csv = df_prediksi.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Unduh Hasil Prediksi", data=csv, file_name='prediksi_harga.csv', mime='text/csv')
+            
 
 # ----------------- Halaman Interpretasi dan Saran -----------------
 if menu == "Interpretasi dan Saran":
