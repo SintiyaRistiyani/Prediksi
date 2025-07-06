@@ -206,7 +206,6 @@ elif menu == "Stasioneritas":
         st.error("❌ Log return **tidak stasioner** (p-value ≥ 0.05 → gagal tolak H0: ada akar unit).")
 
 # ----------------- Halaman Model -----------------
-# ----------------- Halaman Model -----------------
 elif menu == "Model":
     st.title("🔧 Pemodelan MAR-Normal / MAR-GED")
 
@@ -470,117 +469,155 @@ elif menu == "Model":
             st.error("⚠️ Tidak ada model yang berhasil diestimasi.")
                     
 # ----------------- Halaman Prediksi dan Visualisasi -----------------
+# ----------------- Halaman Prediksi dan Visualisasi -----------------
 elif menu == "Prediksi dan Visualisasi":
     st.title("📊 Prediksi dan Visualisasi")
 
-    if 'model_type' not in st.session_state or 'log_return' not in st.session_state or 'df' not in st.session_state:
+    if 'model_type' not in st.session_state or 'log_return' not in st.session_state:
         st.warning("Model belum dilatih atau log return tidak tersedia.")
         st.stop()
 
     model_type = st.session_state['model_type']
-    log_return = st.session_state['log_return'].dropna()
     df = st.session_state['df']
+    log_return = st.session_state['log_return'].dropna()
     selected_col = st.session_state['selected_price_col']
 
-    st.markdown(f"### 🔮 Hasil Prediksi Harga Menggunakan Model: **{model_type}**")
-    
-    forecast_steps = st.number_input("Masukkan jumlah langkah prediksi ke depan:", min_value=1, value=10, step=1)
+    st.markdown(f"### 🔮 Prediksi Harga Menggunakan Model: **{model_type}**")
 
-    def mean_absolute_percentage_error(y_true, y_pred):
-        y_true, y_pred = np.array(y_true), np.array(y_pred)
-        return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+    # Input jumlah langkah prediksi
+    n_steps = st.number_input("Jumlah langkah prediksi ke depan (n_steps):", min_value=1, max_value=365, value=30, step=1)
 
-    # Ambil harga terakhir sebelum prediksi
-    last_price = df[selected_col].dropna().iloc[-1]
+    # ----------------- Fungsi Prediksi MAR-Normal -----------------
+    def predict_mar_normal(model, X_init, n_steps=30):
+        ar_params = model['ar_params']
+        weights = model['weights']
+        p = ar_params.shape[1]
 
-    # ----------------- Prediksi dengan MAR -----------------
-    if model_type.startswith("MAR"):
-        if 'mar_model' not in st.session_state:
-            st.warning("Model MAR belum tersedia.")
-            st.stop()
+        # Komponen dominan (komponen dengan bobot terbesar)
+        main_k = np.argmax(weights)
+        phi = ar_params[main_k]
 
-        model = st.session_state['mar_model']
-        pis = model['pis']
-        betas = model['betas']
-        sigmas = model['sigmas']
-        nus = model.get('nus', [2.0] * len(pis))  # default jika normal
-        k = model['k']
-        p = model['p']
-        dist = model.get('dist', 'normal')
+        # Prediksi iteratif
+        preds = []
+        X_curr = list(X_init[-p:])  # ambil p nilai terakhir sebagai input awal
 
-        data = log_return.values
-        if len(data) <= p:
-            st.error("Data tidak cukup untuk membuat prediksi MAR dengan order p.")
-            st.stop()
+        for _ in range(n_steps):
+            x_lag = np.array(X_curr[-p:])[::-1]  # urutan lag terbaru ke lama
+            next_val = np.dot(phi, x_lag)
+            preds.append(next_val)
+            X_curr.append(next_val)
 
-        # Prediksi in-sample (log return)
-        X_pred = np.column_stack([data[i:len(data)-(p - i)] for i in range(p)])
-        y_actual_log = data[p:]
-        pred_len = len(X_pred)
+        return np.array(preds)
 
-        y_pred_log = np.zeros(pred_len)
-        for j in range(k):
-            y_pred_log += pis[j] * (X_pred @ betas[j])
+    # ----------------- Prediksi -----------------
+# ----------------- Halaman Prediksi dan Visualisasi -----------------
+elif menu == "Prediksi dan Visualisasi":
+    st.title("📊 Prediksi dan Visualisasi")
 
-        # Transformasi log return -> harga
-        price_actual = [df[selected_col].dropna().iloc[p-1]]
-        for r in y_actual_log:
-            price_actual.append(price_actual[-1] * np.exp(r))
-        price_actual = price_actual[1:]
-
-        price_pred = [df[selected_col].dropna().iloc[p-1]]
-        for r in y_pred_log:
-            price_pred.append(price_pred[-1] * np.exp(r))
-        price_pred = price_pred[1:]
-
-        index_pred = df[selected_col].dropna().index[p:]
-
-        df_pred = pd.DataFrame({
-            "Harga Aktual": price_actual,
-            "Harga Prediksi": price_pred
-        }, index=index_pred)
-
-        # ----------------- Prediksi ke Depan (Out-of-Sample) -----------------
-        last_log_values = data[-p:].copy()
-        forecast_log = []
-
-        for _ in range(forecast_steps):
-            step_pred = 0
-            for j in range(k):
-                step_pred += pis[j] * (betas[j] @ last_log_values[-p:])
-            forecast_log.append(step_pred)
-            last_log_values = np.append(last_log_values, step_pred)[-p:]
-
-        # Transformasi forecast log return → harga
-        future_prices = [last_price]
-        for r in forecast_log:
-            future_prices.append(future_prices[-1] * np.exp(r))
-        future_prices = future_prices[1:]
-
-        st.markdown("### 🔮 Prediksi Harga Out-of-Sample")
-        future_index = pd.date_range(start=df.index[-1], periods=forecast_steps+1, freq='D')[1:]
-        df_future = pd.DataFrame({
-            "Prediksi Harga": future_prices
-        }, index=future_index)
-
-        st.line_chart(df_future)
-
-    else:
-        st.error("Model yang dipilih tidak didukung.")
+    if 'model_type' not in st.session_state or 'log_return' not in st.session_state:
+        st.warning("Model belum dilatih atau log return tidak tersedia.")
         st.stop()
 
+    model_type = st.session_state['model_type']
+    df = st.session_state['df']
+    log_return = st.session_state['log_return'].dropna()
+    selected_col = st.session_state['selected_price_col']
+
+    st.markdown(f"### 🔮 Prediksi Harga Menggunakan Model: **{model_type}**")
+
+    # Input jumlah langkah prediksi
+    n_steps = st.number_input("Jumlah langkah prediksi ke depan (n_steps):", min_value=1, max_value=365, value=30, step=1)
+
+    # ----------------- Fungsi Prediksi MAR-Normal -----------------
+    def predict_mar_normal(model, X_init, n_steps=30):
+        ar_params = model['ar_params']
+        weights = model['weights']
+        p = ar_params.shape[1]
+
+        # Komponen dominan (komponen dengan bobot terbesar)
+        main_k = np.argmax(weights)
+        phi = ar_params[main_k]
+
+        preds = []
+        X_curr = list(X_init[-p:])  # ambil p nilai terakhir sebagai input awal
+
+        for _ in range(n_steps):
+            x_lag = np.array(X_curr[-p:])[::-1]  # urutan lag terbaru ke lama
+            next_val = np.dot(phi, x_lag)
+            preds.append(next_val)
+            X_curr.append(next_val)
+
+        return np.array(preds)
+
+    # ----------------- Fungsi Prediksi MAR-GED -----------------
+    def predict_mar_ged(model, X_init, n_steps=30):
+        pred = []
+        X_curr = list(X_init[-model['ar_params'].shape[1]:])  # gunakan p terakhir
+        main_comp = np.argmax(model['weights'])
+
+        phi = model['ar_params'][main_comp]
+        sigma = model['sigmas'][main_comp]
+        beta = model['beta'][main_comp]
+
+        np.random.seed(42)
+
+        for _ in range(n_steps):
+            next_val = np.dot(phi, X_curr[-len(phi):])
+            noise = gennorm.rvs(beta, loc=0, scale=sigma)
+            next_val += noise
+            pred.append(next_val)
+            X_curr.append(next_val)
+
+        return np.array(pred)
+
+    # ----------------- Prediksi -----------------
+    if model_type == "MAR-Normal":
+        if 'best_model' not in st.session_state or 'best_p' not in st.session_state:
+            st.error("Model MAR-Normal belum tersedia. Jalankan training terlebih dahulu.")
+            st.stop()
+
+        model = st.session_state['best_model']
+        X = log_return.values
+
+        pred_log_return = predict_mar_normal(model, X, n_steps=n_steps)
+
+    elif model_type == "MAR-GED":
+        if 'best_model_ged' not in st.session_state or 'best_p_ged' not in st.session_state:
+            st.error("Model MAR-GED belum tersedia. Jalankan training terlebih dahulu.")
+            st.stop()
+
+        model = st.session_state['best_model_ged']
+        X = log_return.values
+
+        pred_log_return = predict_mar_ged(model, X, n_steps=n_steps)
+
+    else:
+        st.warning("Model tidak dikenali.")
+        st.stop()
+
+    # ----------------- Transformasi log-return → harga -----------------
+    last_price = df[selected_col].dropna().iloc[-1]
+    future_prices = [last_price]
+    for r in pred_log_return:
+        future_prices.append(future_prices[-1] * np.exp(r))
+    future_prices = future_prices[1:]
+
+    # Buat tanggal untuk prediksi
+    last_date = df[df[selected_col].notna()].iloc[-1].name
+    future_dates = pd.date_range(start=last_date, periods=n_steps+1, freq='D')[1:]
+
+    df_future = pd.DataFrame({
+        'Tanggal': future_dates,
+        'Prediksi Harga': future_prices
+    }).set_index('Tanggal')
+
     # ----------------- Visualisasi -----------------
-    st.markdown("### 📈 Visualisasi Harga Aktual vs Harga Prediksi (In-sample)")
-    st.line_chart(df_pred)
+    st.markdown("### 📈 Prediksi Harga Ke Depan")
+    st.line_chart(df_future)
 
     # ----------------- Tabel Prediksi -----------------
-    st.markdown("### 📋 Tabel Hasil Prediksi Harga (10 Baris Terakhir)")
-    st.dataframe(df_pred.tail(10))
-
-    # ----------------- Evaluasi -----------------
-    st.markdown("### ✅ Evaluasi Akurasi (MAPE Harga)")
-    mape = mean_absolute_percentage_error(df_pred["Harga Aktual"], df_pred["Harga Prediksi"])
-    st.write(f"**MAPE (Mean Absolute Percentage Error):** {mape:.2f}%")
+    st.markdown("### 📋 Tabel Hasil Prediksi")
+    st.dataframe(df_future)
     
 # ----------------- Halaman Interpretasi dan Saran -----------------
 elif menu == "Interpretasi dan Saran":
