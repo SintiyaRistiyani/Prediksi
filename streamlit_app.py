@@ -105,7 +105,7 @@ elif menu == "Data Preprocessing":
     price_col = st.session_state['selected_price_col']
 
     # Konversi tanggal dan urutkan
-    if 'tanggal' in df.columns:
+    if 'Date' in df.columns:
         df['tanggal'] = pd.to_datetime(df['tanggal'], errors='coerce')
         df = df.dropna(subset=['tanggal'])
         df = df.sort_values(by='tanggal')
