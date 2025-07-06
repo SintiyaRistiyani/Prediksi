@@ -410,6 +410,39 @@ def best_structure_mar_ged(X, max_p=3, max_K=3):
                 continue
 
     return best_model, best_p, best_k
+    
+def predict_mar_normal(model, X_init, n_steps=30):
+    pred = []
+    X_curr = list(X_init[-model['ar_params'].shape[1]:])
+
+    # Gunakan komponen dengan weight terbesar
+    main_comp = np.argmax(model['weights'])
+    phi = model['ar_params'][main_comp]
+
+    for _ in range(n_steps):
+        x_input = np.array(X_curr[-len(phi):])
+        next_val = np.dot(phi, x_input)
+        pred.append(next_val)
+        X_curr.append(next_val)
+
+    return np.array(pred)
+from scipy.stats import gennorm
+
+def predict_mar_ged(model, X_init, n_steps=30):
+    pred = []
+    X_curr = list(X_init[-model['ar_params'].shape[1]:])
+
+    # Gunakan komponen dengan weight terbesar
+    main_comp = np.argmax(model['weights'])
+    phi = model['ar_params'][main_comp]
+
+    for _ in range(n_steps):
+        x_input = np.array(X_curr[-len(phi):])
+        next_val = np.dot(phi, x_input)
+        pred.append(next_val)
+        X_curr.append(next_val)
+
+    return np.array(pred)
 
 if menu == "Model":
     st.title("🏗️ Pemodelan Mixture Autoregressive (MAR)")
@@ -591,39 +624,6 @@ if menu == "Uji Signifikansi dan Residual":
     st.session_state['uji_residual'] = df_residual
 
 # ----------------- Halaman Prediksi dan Visualisasi -----------------
-def predict_mar_normal(model, X_init, n_steps=30):
-    pred = []
-    X_curr = list(X_init[-model['ar_params'].shape[1]:])
-
-    # Gunakan komponen dengan weight terbesar
-    main_comp = np.argmax(model['weights'])
-    phi = model['ar_params'][main_comp]
-
-    for _ in range(n_steps):
-        x_input = np.array(X_curr[-len(phi):])
-        next_val = np.dot(phi, x_input)
-        pred.append(next_val)
-        X_curr.append(next_val)
-
-    return np.array(pred)
-from scipy.stats import gennorm
-
-def predict_mar_ged(model, X_init, n_steps=30):
-    pred = []
-    X_curr = list(X_init[-model['ar_params'].shape[1]:])
-
-    # Gunakan komponen dengan weight terbesar
-    main_comp = np.argmax(model['weights'])
-    phi = model['ar_params'][main_comp]
-
-    for _ in range(n_steps):
-        x_input = np.array(X_curr[-len(phi):])
-        next_val = np.dot(phi, x_input)
-        pred.append(next_val)
-        X_curr.append(next_val)
-
-    return np.array(pred)
-
 if menu == "Prediksi dan Visualisasi":
     st.title("📈 Prediksi dan Visualisasi Harga Saham")
 
