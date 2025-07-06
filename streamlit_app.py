@@ -35,7 +35,7 @@ menu = st.sidebar.radio("Pilih Halaman:", (
     "Data Preprocessing", 
     "Stasioneritas", 
     "Model", 
-    "Uji Signifikansi dan Residual"
+    "Uji Signifikansi dan Residual", 
     "Prediksi dan Visualisasi", 
     "Interpretasi dan Saran"
 ))
