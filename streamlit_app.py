@@ -88,7 +88,7 @@ elif menu == "Input Data":
             st.session_state['selected_price_col'] = harga_col
 
             st.success("✅ Data berhasil dimuat dan kolom harga dikonversi ke numerik.")
-            st.markdown("#### 📋 Preview Data"
+            st.markdown("#### 📋 Preview Data")
             st.dataframe(df.head())
 
         except Exception as e:
