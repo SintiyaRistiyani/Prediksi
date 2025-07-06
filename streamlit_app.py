@@ -107,6 +107,7 @@ elif menu == "Data Preprocessing":
         selected_date_col = st.selectbox("Pilih kolom tanggal:", date_cols)
 
         df[selected_date_col] = pd.to_datetime(df[selected_date_col], errors='coerce')
+        df['Tanggal'] = df[selected_date_col]
         df = df.dropna(subset=[selected_date_col])
         df = df.sort_values(by=selected_date_col).reset_index(drop=True)
 
@@ -659,7 +660,7 @@ if menu == "Prediksi dan Visualisasi":
                 harga_prediksi.append(harga_prediksi[-1] * np.exp(r))
             harga_prediksi = harga_prediksi[1:]  # buang harga awal
 
-            tanggal_awal = df.index[-1]
+            tanggal_awal = df['Tanggal'].iloc[-1] if 'Tanggal' in df.columns else df.iloc[-1][0]
             tanggal_prediksi = pd.date_range(start=tanggal_awal + pd.Timedelta(days=1), periods=n_steps, freq='B')
 
             df_prediksi = pd.DataFrame({
