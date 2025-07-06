@@ -62,7 +62,8 @@ elif menu == "Input Data":
         3. Nilai harga sebaiknya berupa angka tanpa simbol (misal: tanpa `Rp`, `%`, atau pemisah ribuan)
     """)
 
-    uploaded_file = st.file_uploader("Upload file CSV (delimiter = ';')", type=["csv"])
+
+    uploaded_file = st.file_uploader("📂 Upload File CSV (delimiter = ';')", type=["csv"])
 
     if uploaded_file:
         try:
@@ -87,133 +88,98 @@ elif menu == "Input Data":
             st.session_state['selected_price_col'] = harga_col
 
             st.success("✅ Data berhasil dimuat dan kolom harga dikonversi ke numerik.")
+            st.markdown("#### 📋 Preview Data"
             st.dataframe(df.head())
 
         except Exception as e:
             st.error(f"Gagal membaca atau memproses file: {e}")
 
-# ----------------- Halaman Data Preprocessing -----------------
-elif menu == "Data Preprocessing":
-    st.title("🧹 Data Preprocessing")
+# ----------------- Halaman Preprocessing -----------------
+elif menu == "Preprocessing":
+    st.title("⚙️ Preprocessing Data")
 
     if 'df' not in st.session_state or 'selected_price_col' not in st.session_state:
-        st.warning("Silakan upload data terlebih dahulu di halaman Input Data.")
-    else:
-        df = st.session_state['df']
-        selected_column = st.session_state['selected_price_col']
-
-        # Pilih kolom tanggal
-        date_cols = [col for col in df.columns if 'tgl' in col.lower() or 'date' in col.lower()]
-        selected_date_col = st.selectbox("Pilih kolom tanggal:", date_cols)
-
-        df[selected_date_col] = pd.to_datetime(df[selected_date_col], errors='coerce')
-        df['Tanggal'] = df[selected_date_col]
-        df = df.dropna(subset=[selected_date_col])
-        df = df.sort_values(by=selected_date_col).reset_index(drop=True)
-
-        st.markdown(f"### 📈 Data Asli dari Kolom **{selected_column}**")
-        df_plot = df[[selected_date_col, selected_column]].dropna().set_index(selected_date_col)
-        st.line_chart(df_plot)
-
-        # Missing Value Handling
-        st.markdown("### 2️⃣ Penanganan Missing Value")
-        st.write(f"Jumlah nilai kosong sebelum: {df[selected_column].isnull().sum()}")
-        method = st.selectbox("Metode pengisian missing value", ['ffill', 'bfill', 'interpolate', 'drop'])
-
-        if method == 'drop':
-            df_clean = df[selected_column].dropna()
-        elif method == 'interpolate':
-            df_clean = df[selected_column].interpolate()
-        else:
-            df_clean = df[selected_column].fillna(method=method)
-
-        df_clean = pd.to_numeric(df_clean, errors='coerce')
-        st.write(f"Jumlah nilai kosong setelah: {df_clean.isnull().sum()}")
-
-        # ----------------- Log Return -----------------
-        st.markdown("### 3️⃣ Hitung Log Return")
-        df['Log_Return'] = np.log(df[selected_column] / df[selected_column].shift(1))
-        df = df.dropna(subset=['Log_Return'])
-        st.session_state['log_return'] = df['Log_Return']
-        st.session_state['df'] = df  # simpan update dataframe dengan log return
-        st.session_state['original_df'] = df.copy()  # simpan untuk prediksi
-
-        st.dataframe(df[[selected_column, 'Log_Return']].head())
-
-        # Visualisasi
-        st.markdown("### 4️⃣ Visualisasi Data dan Log Return")
-
-        log_return = st.session_state['log_return']
-
-        # Gabungkan untuk visual
-        df_viz = pd.DataFrame({
-            'Tanggal': df[selected_date_col],
-            'Harga': df_clean,
-            'LogReturn': log_return
-        }).dropna().set_index('Tanggal')
-
-        fig, ax = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
-
-        ax[0].plot(df_viz.index, df_viz['Harga'], color='blue')
-        ax[0].set_title("Harga Saham")
-
-        ax[1].plot(df_viz.index, df_viz['LogReturn'], color='green')
-        ax[1].set_title("Log Return")
-
-        for axis in ax:
-            axis.grid(True)
-            axis.tick_params(axis='x', rotation=45)
-
-        plt.tight_layout()
-        st.pyplot(fig)
-
-# ----------------- Halaman Stasioneritas -----------------
-elif menu == "Stasioneritas":
-    st.title("📉 Uji Stasioneritas (ADF Test - Log Return)")
-
-    if 'log_return' not in st.session_state or 'selected_price_col' not in st.session_state:
-        st.warning("Silakan lakukan preprocessing terlebih dahulu agar log return tersedia.")
+        st.warning("Mohon upload dan pilih kolom harga terlebih dahulu di halaman 'Input Data'.")
         st.stop()
 
-    log_return = st.session_state['log_return']
-    selected_col = st.session_state['selected_price_col']
+    df = st.session_state['df'].copy()
+    price_col = st.session_state['selected_price_col']
 
-    st.markdown(f"Kolom yang dianalisis: **{selected_col}**")
-    st.markdown("Uji stasioneritas dilakukan terhadap **log return** dari data harga saham.")
+    # Konversi tanggal dan urutkan
+    if 'tanggal' in df.columns:
+        df['tanggal'] = pd.to_datetime(df['tanggal'], errors='coerce')
+        df = df.dropna(subset=['tanggal'])
+        df = df.sort_values(by='tanggal')
+    else:
+        st.error("Kolom 'tanggal' tidak ditemukan.")
+        st.stop()
 
-    # Visualisasi log return
-    st.markdown("### 🔍 Visualisasi Log Return")
-    st.line_chart(log_return)
+    df['log_return'] = np.log(df[price_col] / df[price_col].shift(1))
+    df = df.dropna()
 
-    # Siapkan dataframe log return untuk ADF test
-    df_test = pd.DataFrame({selected_col: log_return.values}, index=log_return.index)
+    # Simpan ke session_state
+    st.session_state['preprocessed_df'] = df
+    st.session_state['log_return'] = df['log_return']
+
+    # --- Split data (30 hari terakhir untuk test) ---
+    n_test = 30
+    log_return_train = df['log_return'][:-n_test]
+    log_return_test = df['log_return'][-n_test:]
+
+    st.session_state['log_return_train'] = log_return_train
+    st.session_state['log_return_test'] = log_return_test
+
+    st.success("✅ Data berhasil diproses dan di-split menjadi train dan test.")
+    st.markdown("### 📈 Preview Data (Log Return)")
+    st.dataframe(df.tail(40))
+
+# ----------------- Halaman Stasioneritas -----------------
+elif menu == "Uji Stasioneritas":
+    st.title("📉 Uji Stasioneritas Log Return")
+
+    if 'log_return' not in st.session_state:
+        st.warning("⚠️ Silakan lakukan *Preprocessing* terlebih dahulu.")
+        st.stop()
 
     from statsmodels.tsa.stattools import adfuller
-    result = adfuller(df_test[selected_col].dropna())
+    log_return = st.session_state['log_return'].dropna()
 
-    # Tampilkan hasil ADF
-    st.markdown("### 📋 Hasil Uji ADF (Augmented Dickey-Fuller)")
-    st.markdown(f"""
-    - **ADF Statistic**: `{result[0]:.4f}`  
-    - **p-value**: `{result[1]:.4f}`
-    - **Lags Used**: `{result[2]}`
-    - **Jumlah Observasi Efektif**: `{result[3]}`
+    st.markdown("""
+    Uji stasioneritas dilakukan menggunakan **Augmented Dickey-Fuller (ADF) Test** untuk melihat apakah data log return bersifat stasioner (mean dan varians konstan terhadap waktu).
     """)
 
-    st.markdown("**Critical Values:**")
-    for key, value in result[4].items():
-        st.markdown(f"- `{key}`: `{value:.4f}`")
+    result = adfuller(log_return)
+    adf_stat, p_value, usedlag, nobs, crit_values, icbest = result
 
-    # Interpretasi
-    if result[1] < 0.05:
-        st.success("✅ Log return **stasioner** (p-value < 0.05 → tolak H0: tidak ada akar unit).")
+    st.write("### 📊 Hasil ADF Test:")
+    st.write(f"ADF Statistic: `{adf_stat:.5f}`")
+    st.write(f"p-value: `{p_value:.5f}`")
+    st.write(f"Jumlah Lag yang Digunakan: `{usedlag}`")
+    st.write("Nilai Kritis:")
+    for key, val in crit_values.items():
+        st.write(f" - {key}: `{val:.5f}`")
+
+    if p_value < 0.05:
+        st.success("✅ Data log return bersifat **stasioner** (tolak H0).")
     else:
-        st.error("❌ Log return **tidak stasioner** (p-value ≥ 0.05 → gagal tolak H0: ada akar unit).")
-   
-    st.session_state['adf_result'] = result  # simpan tuple hasil ADF
+        st.warning("⚠️ Data log return **tidak stasioner** (gagal tolak H0). Pertimbangkan transformasi tambahan atau pengecekan data.")
+    
+    # Visualisasi ACF dan PACF
+    st.markdown("### 🔍 Visualisasi ACF dan PACF")
+    from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(2, 1, figsize=(10, 6))
+    plot_acf(log_return, ax=ax[0], lags=30)
+    plot_pacf(log_return, ax=ax[1], lags=30)
+    ax[0].set_title("ACF Log Return")
+    ax[1].set_title("PACF Log Return")
+    st.pyplot(fig)
+
+    # Simpan hasil ke session_state
+    st.session_state['stationary_return'] = log_return
 
 # ----------------- Halaman Model -----------------
-
 # --- Inisialisasi parameter MAR-Normal ---
 def initialize_parameters_mar_normal(X, p, K):
     N = len(X)
@@ -642,6 +608,8 @@ if menu == "Uji Signifikansi dan Residual":
 
     df_residual = pd.DataFrame(residual_results)
     st.dataframe(df_residual)
+
+    # Simpan ke session_state
     st.session_state['uji_signif'] = df_signif
     st.session_state['uji_residual'] = df_residual
 
@@ -690,55 +658,117 @@ if menu == "Prediksi dan Visualisasi":
                 'Prediksi Harga': harga_prediksi
             })
 
-            # ⬅️ Tambahkan penyimpanan hasil ke session_state
+            # Simpan ke session_state
             st.session_state['hasil_prediksi'] = df_prediksi
             st.session_state['n_steps_prediksi'] = n_steps
             st.session_state['pred_log_return'] = pred_log_return
             st.session_state['pred_harga'] = harga_prediksi
 
-            # Visualisasi & tabel
+            # Visualisasi
             st.line_chart(df_prediksi.set_index('Tanggal')['Prediksi Harga'])
+
+            # Tabel hasil
             st.dataframe(df_prediksi.style.format({
                 'Log Return': '{:.6f}',
                 'Prediksi Harga': 'Rp{:,.2f}'
             }))
 
-            # Tombol Unduh
+            # Unduh CSV
             csv = df_prediksi.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Unduh Hasil Prediksi", data=csv, file_name='prediksi_harga.csv', mime='text/csv')
             
+# ----------------- Halaman Interpretasi Hasil -----------------
+if menu == "Interpretasi Hasil":
+    st.title("🧠 Interpretasi Hasil Model & Prediksi")
 
-# ----------------- Halaman Interpretasi dan Saran -----------------
-if menu == "Interpretasi dan Saran":
-    st.title("🧭 Interpretasi dan Saran")
-
-    if 'model_type' not in st.session_state:
-        st.warning("Model belum tersedia. Silakan latih model terlebih dahulu.")
+    if 'model_type' not in st.session_state or 'hasil_prediksi' not in st.session_state:
+        st.warning("Pastikan Anda sudah melakukan pelatihan dan prediksi model.")
         st.stop()
 
-    st.subheader("📌 Interpretasi Model")
     model_type = st.session_state['model_type']
-    st.markdown(f"Model yang digunakan: **{model_type}**")
+    st.subheader("📄 Ringkasan Model")
 
     if model_type == "MAR-Normal":
         model = st.session_state['best_model']
-        ar_params = model['ar_params']
-        signif_ar = np.any(np.abs(ar_params) > 0.1)
-        if signif_ar:
-            st.write("Model menunjukkan adanya efek autoregresif yang cukup kuat pada beberapa komponen.")
-        else:
-            st.write("Mayoritas parameter AR tidak signifikan. Pergerakan harga bersifat acak atau didominasi noise.")
+        p = st.session_state['best_p']
+        K = st.session_state['best_k']
+        st.write("**Jenis Model:** MAR-Normal")
     else:
         model = st.session_state['best_model_ged']
-        st.write("Model menggunakan distribusi Generalized Error (GED) yang cocok untuk data dengan kurtosis tinggi atau heavy-tail.")
+        p = st.session_state['best_p_ged']
+        K = st.session_state['best_k_ged']
+        st.write("**Jenis Model:** MAR-GED")
 
-    st.subheader("📈 Prediksi dan Risiko")
-    st.markdown("Hasil prediksi dapat digunakan sebagai acuan pergerakan harga jangka pendek. Namun, tetap perlu waspada terhadap volatilitas dan ketidakpastian pasar.")
-
-    st.subheader("🧠 Saran Penggunaan")
-    st.markdown("""
-    - Gunakan model ini untuk simulasi dan eksplorasi, bukan sebagai satu-satunya acuan keputusan investasi.
-    - Perbarui model secara berkala untuk menangkap dinamika pasar terbaru.
-    - Lakukan validasi out-of-sample untuk mengukur akurasi jangka panjang.
-    - Kombinasikan dengan analisis teknikal/fundamental untuk hasil yang lebih komprehensif.
+    st.markdown(f"""
+    - **Ordo AR (p):** {p}
+    - **Jumlah Komponen (K):** {K}
+    - **Log-Likelihood:** {model['log_likelihood']:.2f}
+    - **BIC:** {model['bic']:.2f}
     """)
+
+    st.subheader("📌 Parameter Model")
+    for k in range(K):
+        st.markdown(f"**Komponen {k+1}**")
+        st.write(f"**Bobot (π):** {model['weights'][k]:.4f}")
+        st.write(f"**AR Coef (ϕ):** {model['ar_params'][k]}")
+        st.write(f"**Sigma (σ):** {model['sigmas'][k]:.6f}")
+        if model_type == "MAR-GED":
+            st.write(f"**Beta (β):** {model['beta'][k]:.2f}")
+        st.markdown("---")
+
+    st.subheader("📈 Visualisasi Hasil Prediksi")
+    df_prediksi = st.session_state['hasil_prediksi']
+    st.line_chart(df_prediksi.set_index('Tanggal')['Prediksi Harga'])
+
+    st.dataframe(df_prediksi.style.format({
+        'Log Return': '{:.6f}',
+        'Prediksi Harga': 'Rp{:,.2f}'
+    }))
+
+    st.subheader("🧠 Interpretasi Singkat")
+    harga_awal = df_prediksi['Prediksi Harga'].iloc[0]
+    harga_akhir = df_prediksi['Prediksi Harga'].iloc[-1]
+    perubahan = ((harga_akhir - harga_awal) / harga_awal) * 100
+
+    arah = "naik 📈" if perubahan > 0 else "turun 📉"
+    st.success(f"Model memprediksi bahwa harga saham akan **{arah} sebesar {perubahan:.2f}%** dalam {len(df_prediksi)} hari ke depan.")
+    st.subheader("🔍 Perbandingan Harga Aktual vs Prediksi")
+
+    if 'original_df' in st.session_state and 'selected_price_col' in st.session_state:
+        df_asli = st.session_state['original_df'].copy()
+        kolom_harga = st.session_state['selected_price_col']
+
+        # Ambil harga historis 60 hari terakhir (jika ada)
+        df_asli['Tanggal'] = pd.to_datetime(df_asli['Tanggal'])
+        df_asli = df_asli.sort_values('Tanggal')
+        df_asli = df_asli[-60:] if len(df_asli) > 60 else df_asli
+
+        # Gabungkan dengan prediksi
+        df_prediksi['Tipe'] = 'Prediksi'
+        df_asli_show = df_asli[['Tanggal', kolom_harga]].rename(columns={kolom_harga: 'Harga'})
+        df_asli_show['Tipe'] = 'Aktual'
+
+        df_pred_show = df_prediksi[['Tanggal', 'Prediksi Harga']].rename(columns={'Prediksi Harga': 'Harga'})
+
+        df_gabung = pd.concat([df_asli_show, df_pred_show], ignore_index=True)
+
+        import altair as alt
+
+        chart = alt.Chart(df_gabung).mark_line(point=True).encode(
+            x='Tanggal:T',
+            y='Harga:Q',
+            color=alt.Color('Tipe:N', scale=alt.Scale(scheme='category10')),
+            tooltip=['Tanggal:T', 'Harga:Q', 'Tipe:N']
+        ).properties(
+            width=800,
+            height=400,
+            title="Harga Aktual vs Harga Prediksi"
+        ).interactive()
+
+        st.altair_chart(chart, use_container_width=True)
+    else:
+        st.warning("Data asli tidak tersedia untuk perbandingan.")
+
+    # Tombol unduh hasil lengkap
+    csv = df_prediksi.to_csv(index=False).encode('utf-8')
+    st.download_button("📥 Unduh Tabel Prediksi", data=csv, file_name='tabel_prediksi.csv', mime='text/csv')
