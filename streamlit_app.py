@@ -206,9 +206,6 @@ elif menu == "Stasioneritas":
         st.error("❌ Log return **tidak stasioner** (p-value ≥ 0.05 → gagal tolak H0: ada akar unit).")
 
 # ----------------- Halaman Model -----------------
-import streamlit as st
-import pandas as pd
-import numpy as np
 from sklearn.cluster import KMeans
 from scipy.stats import gennorm
 import matplotlib.pyplot as plt
@@ -441,90 +438,6 @@ def predict_mar_ged(model, X_init, n_steps=30):
         pred.append(next_val)
         X_curr.append(next_val)
     return np.array(pred)
-
-# =================== Halaman ===================
-
-menu = st.sidebar.radio("Pilih Halaman:", [
-    "Home", 
-    "Input Data", 
-    "Preprocessing", 
-    "Stasioneritas", 
-    "Model", 
-    "Prediksi dan Visualisasi", 
-    "Interpretasi dan Saran"
-])
-
-# ================= Home ===================
-if menu == "Home":
-    st.title("📈 Aplikasi Prediksi Harga Saham dengan Model MAR")
-    st.write("Gunakan sidebar untuk navigasi.")
-
-# ================= Input Data ===================
-elif menu == "Input Data":
-    st.title("📥 Input Data CSV")
-    uploaded_file = st.file_uploader("Upload file CSV (delimiter ';')", type=["csv"])
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file, delimiter=';')
-        st.session_state['df'] = df
-        st.success("Data berhasil dimuat!")
-        st.dataframe(df.head())
-
-# ================= Preprocessing ===================
-elif menu == "Preprocessing":
-    st.title("🧹 Preprocessing Data")
-    if 'df' not in st.session_state:
-        st.warning("Upload data dulu di halaman Input Data.")
-        st.stop()
-
-    df = st.session_state['df']
-    st.write(df.columns)
-    price_col = st.selectbox("Pilih kolom harga saham:", df.columns)
-    date_col = st.selectbox("Pilih kolom tanggal:", df.columns)
-
-    df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
-    df = df.dropna(subset=[date_col])
-    df = df.sort_values(date_col).reset_index(drop=True)
-
-    # Konversi harga ke numerik jika perlu
-    df[price_col] = pd.to_numeric(df[price_col], errors='coerce')
-
-    # Hitung log return
-    df['Log_Return'] = np.log(df[price_col] / df[price_col].shift(1))
-    df = df.dropna(subset=['Log_Return'])
-
-    st.session_state['df'] = df
-    st.session_state['selected_price_col'] = price_col
-    st.session_state['selected_date_col'] = date_col
-    st.session_state['log_return'] = df['Log_Return']
-
-    st.write(df[[date_col, price_col, 'Log_Return']].head())
-
-# ================= Stasioneritas ===================
-elif menu == "Stasioneritas":
-    st.title("📉 Uji Stasioneritas (ADF Test)")
-    if 'log_return' not in st.session_state:
-        st.warning("Lakukan preprocessing terlebih dahulu.")
-        st.stop()
-
-    log_return = st.session_state['log_return']
-    selected_col = st.session_state['selected_price_col']
-
-    from statsmodels.tsa.stattools import adfuller
-    result = adfuller(log_return)
-
-    st.write(f"ADF Statistic: {result[0]:.4f}")
-    st.write(f"p-value: {result[1]:.4f}")
-    st.write(f"Lags Used: {result[2]}")
-    st.write(f"Number of Observations: {result[3]}")
-
-    st.write("Critical Values:")
-    for k, v in result[4].items():
-        st.write(f"  {k}: {v:.4f}")
-
-    if result[1] < 0.05:
-        st.success("Data log return stasioner (tolak H0)")
-    else:
-        st.warning("Data log return tidak stasioner (gagal tolak H0)")
 
 # ================= Model ===================
 elif menu == "Model":
