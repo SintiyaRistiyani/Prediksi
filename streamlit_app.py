@@ -372,7 +372,7 @@ def em_mar_ged(X, p, K, max_iter=100, tol=1e-6):
             mu_k = X_lagged @ ar_params[k]
             residuals = y - mu_k
             sigmas[k] = np.sqrt(np.sum(r_k * residuals ** 2) / N_k) + 1e-6
-            betas[k] = 2.0  # tetap fixed (bisa dikembangkan jika perlu)
+            betas[k] = 2.0
 
         loglik = np.sum(np.log(pdfs.sum(axis=1) + 1e-12))
         if abs(loglik - loglik_old) < tol:
@@ -452,11 +452,19 @@ if menu == "Model":
                         st.session_state['best_model'] = model
                         st.session_state['best_p'] = best_p
                         st.session_state['best_k'] = best_k
+                        st.session_state['model_type'] = "MAR-Normal"
+                        st.session_state['ar_params'] = model['ar_params']
+                        st.session_state['sigmas'] = model['sigmas']
+                        st.session_state['weights'] = model['weights']
                     else:
                         model = em_mar_ged(X, best_p, best_k)
                         st.session_state['best_model_ged'] = model
                         st.session_state['best_p_ged'] = best_p
                         st.session_state['best_k_ged'] = best_k
+                        st.session_state['model_type'] = "MAR-GED"
+                        st.session_state['ar_params'] = model['ar_params']
+                        st.session_state['sigmas'] = model['sigmas']
+                        st.session_state['weights'] = model['weights']
                     st.success(f"Model dilatih: p = {best_p}, K = {best_k}")
 
     elif metode_pemodelan == "Manual":
@@ -471,36 +479,19 @@ if menu == "Model":
                     st.session_state['best_p'] = p_manual
                     st.session_state['best_k'] = K_manual
                     st.session_state['model_type'] = "MAR-Normal"
+                    st.session_state['ar_params'] = model['ar_params']
+                    st.session_state['sigmas'] = model['sigmas']
+                    st.session_state['weights'] = model['weights']
                 else:
                     model = em_mar_ged(X, p_manual, K_manual)
                     st.session_state['best_model_ged'] = model
                     st.session_state['best_p_ged'] = p_manual
                     st.session_state['best_k_ged'] = K_manual
                     st.session_state['model_type'] = "MAR-GED"
+                    st.session_state['ar_params'] = model['ar_params']
+                    st.session_state['sigmas'] = model['sigmas']
+                    st.session_state['weights'] = model['weights']
                 st.success(f"Model dilatih: p = {p_manual}, K = {K_manual}")
-
-    st.markdown("### 📌 Ringkasan Parameter Model")
-    if 'model_type' in st.session_state:
-        if st.session_state['model_type'] == "MAR-Normal" and 'best_model' in st.session_state:
-            model = st.session_state['best_model']
-            st.write(f"**p**: {st.session_state['best_p']}, **K**: {st.session_state['best_k']}")
-            st.write("**Weights:**", model['weights'])
-            st.write("**AR Params:**", model['ar_params'])
-            st.write("**Sigma (Variansi):**", model['sigmas'])
-            st.write(f"**Log-Likelihood**: {model['log_likelihood']:.2f}")
-            st.write(f"**BIC**: {model['bic']:.2f}")
-
-        elif st.session_state['model_type'] == "MAR-GED" and 'best_model_ged' in st.session_state:
-            model = st.session_state['best_model_ged']
-            st.write(f"**p**: {st.session_state['best_p_ged']}, **K**: {st.session_state['best_k_ged']}")
-            st.write("**Weights:**", model['weights'])
-            st.write("**AR Params:**", model['ar_params'])
-            st.write("**Sigma (Scale):**", model['sigmas'])
-            st.write("**Beta (Shape):**", model['beta'])
-            st.write(f"**Log-Likelihood**: {model['log_likelihood']:.2f}")
-            st.write(f"**BIC**: {model['bic']:.2f}")
-
-
 
 # ----------------- Halaman Uji Signifikansi dan Residual -----------------
 if menu == "Uji Signifikansi dan Residual":
