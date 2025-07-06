@@ -125,11 +125,13 @@ elif menu == "Preprocessing":
     st.markdown("### ✂️ Split Data (Train/Test)")
 
     n_test = 30
+    log_return = df['log_return']
     log_return_train = log_return[:-n_test]
     log_return_test = log_return[-n_test:]
 
     st.session_state['log_return_train'] = log_return_train
     st.session_state['log_return_test'] = log_return_test
+    st.session_state['original_df'] = df.copy()
 
     st.info(f"Data telah dibagi: {len(log_return_train)} data untuk training, {len(log_return_test)} data untuk testing (30 hari terakhir).")
 
@@ -632,7 +634,7 @@ if menu == "Prediksi dan Visualisasi":
 
             # Hitung harga dari log return
             harga_prediksi = [harga_terakhir]
-            for r in pred_log_return_train:
+            for r in pred_log_return:
                 harga_prediksi.append(harga_prediksi[-1] * np.exp(r))
             harga_prediksi = harga_prediksi[1:]  # buang harga awal
 
