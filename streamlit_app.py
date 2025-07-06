@@ -94,7 +94,7 @@ elif menu == "Input Data":
             st.error(f"Gagal membaca atau memproses file: {e}")
 
 # ----------------- Halaman Preprocessing -----------------
-elif menu == "Preprocessing":
+elif menu == "Data Preprocessing":
     st.title("⚙️ Preprocessing Data")
 
     if 'df' not in st.session_state or 'selected_price_col' not in st.session_state:
