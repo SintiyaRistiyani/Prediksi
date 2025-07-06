@@ -601,7 +601,7 @@ if menu == "Prediksi dan Visualisasi":
     model_type = st.session_state['model_type']
     log_return = st.session_state['log_return']
     df = st.session_state['original_df']
-    selected_col = st.session_state['selected_col']
+    selected_col = st.session_state['selected_price_col']
 
     if selected_col not in df.columns:
         st.error("Kolom harga tidak ditemukan dalam data asli.")
