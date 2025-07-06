@@ -121,63 +121,50 @@ elif menu == "Preprocessing":
     st.session_state['preprocessed_df'] = df
     st.session_state['log_return'] = df['log_return']
 
-    # --- Split data (30 hari terakhir untuk test) ---
+       # ----------------- Split Data -----------------
+    st.markdown("### ✂️ Split Data (Train/Test)")
+
     n_test = 30
-    log_return_train = df['log_return'][:-n_test]
-    log_return_test = df['log_return'][-n_test:]
+    log_return_train = log_return[:-n_test]
+    log_return_test = log_return[-n_test:]
 
     st.session_state['log_return_train'] = log_return_train
     st.session_state['log_return_test'] = log_return_test
 
-    st.success("✅ Data berhasil diproses dan di-split menjadi train dan test.")
-    st.markdown("### 📈 Preview Data (Log Return)")
-    st.dataframe(df.tail(40))
+    st.info(f"Data telah dibagi: {len(log_return_train)} data untuk training, {len(log_return_test)} data untuk testing (30 hari terakhir).")
+
+    st.line_chart({
+        "Train": log_return_train,
+        "Test": pd.Series(log_return_test, index=range(len(log_return_train), len(log_return_train) + len(log_return_test)))
+    })
 
 # ----------------- Halaman Stasioneritas -----------------
 elif menu == "Uji Stasioneritas":
     st.title("📉 Uji Stasioneritas Log Return")
 
-    if 'log_return' not in st.session_state:
-        st.warning("⚠️ Silakan lakukan *Preprocessing* terlebih dahulu.")
+    if 'log_return_train' not in st.session_state:
+        st.warning("Data train belum tersedia. Harap lakukan preprocessing terlebih dahulu.")
         st.stop()
 
-    from statsmodels.tsa.stattools import adfuller
-    log_return = st.session_state['log_return'].dropna()
+    log_return_train = st.session_state['log_return_train']
+st.markdown("### 🧪 Uji ADF (Augmented Dickey-Fuller)")
+    adf_result = adfuller(log_return_train)
+    st.write(f"ADF Statistic: {adf_result[0]:.4f}")
+    st.write(f"p-value: {adf_result[1]:.4f}")
+    st.write("Kesimpulan:", "✅ Stasioner" if adf_result[1] < 0.05 else "❌ Tidak Stasioner")
 
-    st.markdown("""
-    Uji stasioneritas dilakukan menggunakan **Augmented Dickey-Fuller (ADF) Test** untuk melihat apakah data log return bersifat stasioner (mean dan varians konstan terhadap waktu).
-    """)
+    st.markdown("### 🔁 Plot ACF dan PACF (Train Only)")
 
-    result = adfuller(log_return)
-    adf_stat, p_value, usedlag, nobs, crit_values, icbest = result
+    fig1, ax1 = plt.subplots()
+    plot_acf(log_return_train, ax=ax1, lags=20)
+    st.pyplot(fig1)
 
-    st.write("### 📊 Hasil ADF Test:")
-    st.write(f"ADF Statistic: `{adf_stat:.5f}`")
-    st.write(f"p-value: `{p_value:.5f}`")
-    st.write(f"Jumlah Lag yang Digunakan: `{usedlag}`")
-    st.write("Nilai Kritis:")
-    for key, val in crit_values.items():
-        st.write(f" - {key}: `{val:.5f}`")
-
-    if p_value < 0.05:
-        st.success("✅ Data log return bersifat **stasioner** (tolak H0).")
-    else:
-        st.warning("⚠️ Data log return **tidak stasioner** (gagal tolak H0). Pertimbangkan transformasi tambahan atau pengecekan data.")
-    
-    # Visualisasi ACF dan PACF
-    st.markdown("### 🔍 Visualisasi ACF dan PACF")
-    from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
-    import matplotlib.pyplot as plt
-
-    fig, ax = plt.subplots(2, 1, figsize=(10, 6))
-    plot_acf(log_return, ax=ax[0], lags=30)
-    plot_pacf(log_return, ax=ax[1], lags=30)
-    ax[0].set_title("ACF Log Return")
-    ax[1].set_title("PACF Log Return")
-    st.pyplot(fig)
+    fig2, ax2 = plt.subplots()
+    plot_pacf(log_return_train, ax=ax2, lags=20, method='ywm')
+    st.pyplot(fig2)
 
     # Simpan hasil ke session_state
-    st.session_state['stationary_return'] = log_return
+    st.session_state['stationary_return'] = log_return_train
 
 # ----------------- Halaman Model -----------------
 # --- Inisialisasi parameter MAR-Normal ---
@@ -258,7 +245,7 @@ def em_mar_normal(X, p, K, max_iter=100, tol=1e-6):
     }
 
 # --- Cari struktur terbaik MAR-Normal ---
-def best_structure_mar_normal(X, max_p=3, max_K=3):
+def best_structure_mar_normal(X, max_p=5, max_K=5):
     best_model = None
     best_bic = np.inf
     best_p, best_k = None, None
@@ -439,7 +426,7 @@ if menu == "Model":
         st.warning("Lakukan preprocessing terlebih dahulu.")
         st.stop()
 
-    X = st.session_state['log_return'].values
+    X = st.session_state['log_return_train'].values
 
     model_choice = st.selectbox("Pilih Jenis Model:", ["MAR-Normal", "MAR-GED"])
     metode_pemodelan = st.radio("Pilih Metode Pemodelan:", ["Otomatis (EM + BIC)", "Manual"])
@@ -522,7 +509,7 @@ if menu == "Uji Signifikansi dan Residual":
         st.warning("Silakan latih model terlebih dahulu di halaman Model.")
         st.stop()
 
-    X = st.session_state['log_return'].values
+    X = st.session_state['log_return_train'].values
     model_type = st.session_state['model_type']
 
     if model_type == "MAR-Normal":
@@ -617,12 +604,12 @@ if menu == "Uji Signifikansi dan Residual":
 if menu == "Prediksi dan Visualisasi":
     st.title("📈 Prediksi dan Visualisasi Harga Saham")
 
-    if 'model_type' not in st.session_state or 'log_return' not in st.session_state or 'original_df' not in st.session_state or 'selected_price_col' not in st.session_state:
+    if 'model_type' not in st.session_state or 'log_return_train' not in st.session_state or 'original_df' not in st.session_state or 'selected_price_col' not in st.session_state:
         st.warning("Pastikan data sudah diproses dan model sudah dilatih.")
         st.stop()
 
     model_type = st.session_state['model_type']
-    log_return = st.session_state['log_return']
+    log_return_train = st.session_state['log_return_train']
     df = st.session_state['original_df']
     selected_price_col = st.session_state['selected_price_col']
 
@@ -638,14 +625,14 @@ if menu == "Prediksi dan Visualisasi":
         with st.spinner("Melakukan prediksi..."):
             if model_type == "MAR-Normal":
                 model = st.session_state['best_model']
-                pred_log_return = predict_mar_normal(model, log_return.values, n_steps=n_steps)
+                pred_log_return = predict_mar_normal(model, log_return_train.values, n_steps=n_steps)
             else:
                 model = st.session_state['best_model_ged']
-                pred_log_return = predict_mar_ged(model, log_return.values, n_steps=n_steps)
+                pred_log_return = predict_mar_ged(model, log_return_train.values, n_steps=n_steps)
 
             # Hitung harga dari log return
             harga_prediksi = [harga_terakhir]
-            for r in pred_log_return:
+            for r in pred_log_return_train:
                 harga_prediksi.append(harga_prediksi[-1] * np.exp(r))
             harga_prediksi = harga_prediksi[1:]  # buang harga awal
 
@@ -654,14 +641,14 @@ if menu == "Prediksi dan Visualisasi":
 
             df_prediksi = pd.DataFrame({
                 'Tanggal': tanggal_prediksi,
-                'Log Return': pred_log_return,
+                'Log Return': pred_log_return_train,
                 'Prediksi Harga': harga_prediksi
             })
 
             # Simpan ke session_state
             st.session_state['hasil_prediksi'] = df_prediksi
             st.session_state['n_steps_prediksi'] = n_steps
-            st.session_state['pred_log_return'] = pred_log_return
+            st.session_state['pred_log_return_train'] = pred_log_return_train
             st.session_state['pred_harga'] = harga_prediksi
 
             # Visualisasi
