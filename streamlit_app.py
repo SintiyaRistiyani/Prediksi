@@ -135,6 +135,7 @@ elif menu == "Data Preprocessing":
         df = df.dropna(subset=['Log_Return'])
         st.session_state['log_return'] = df['Log_Return']
         st.session_state['df'] = df  # simpan update dataframe dengan log return
+        st.session_state['original_df'] = df.copy()  # simpan untuk prediksi
 
         st.dataframe(df[[selected_column, 'Log_Return']].head())
 
@@ -207,6 +208,8 @@ elif menu == "Stasioneritas":
         st.success("✅ Log return **stasioner** (p-value < 0.05 → tolak H0: tidak ada akar unit).")
     else:
         st.error("❌ Log return **tidak stasioner** (p-value ≥ 0.05 → gagal tolak H0: ada akar unit).")
+   
+    st.session_state['adf_result'] = result  # simpan tuple hasil ADF
 
 # ----------------- Halaman Model -----------------
 
@@ -496,6 +499,8 @@ if menu == "Model":
             st.write("**Beta (Shape):**", model['beta'])
             st.write(f"**Log-Likelihood**: {model['log_likelihood']:.2f}")
             st.write(f"**BIC**: {model['bic']:.2f}")
+
+
 
 # ----------------- Halaman Uji Signifikansi dan Residual -----------------
 if menu == "Uji Signifikansi dan Residual":
