@@ -413,37 +413,58 @@ def best_structure_mar_ged(X, max_p=3, max_K=3):
     return best_model, best_p, best_k
     
 def predict_mar_normal(model, X_init, n_steps=30):
-    pred = []
-    X_curr = list(X_init[-model['ar_params'].shape[1]:])
+    """
+    Prediksi n_steps ke depan menggunakan komponen utama dari model MAR-Normal.
+    """
+    ar_params = model['ar_params']
+    weights = model['weights']
+    p = ar_params.shape[1]
 
-    # Gunakan komponen dengan weight terbesar
-    main_comp = np.argmax(model['weights'])
-    phi = model['ar_params'][main_comp]
+    # Komponen dominan (komponen dengan bobot terbesar)
+    main_k = np.argmax(weights)
+    phi = ar_params[main_k]
+
+    # Prediksi iteratif
+    preds = []
+    X_curr = list(X_init[-p:])  # ambil p nilai terakhir sebagai input awal
 
     for _ in range(n_steps):
-        x_input = np.array(X_curr[-len(phi):])
-        next_val = np.dot(phi, x_input)
-        pred.append(next_val)
+        x_lag = np.array(X_curr[-p:])[::-1]  # urutan lag terbaru ke lama
+        next_val = np.dot(phi, x_lag)
+        preds.append(next_val)
         X_curr.append(next_val)
 
-    return np.array(pred)
-from scipy.stats import gennorm
+    return np.array(preds)
 
 def predict_mar_ged(model, X_init, n_steps=30):
-    pred = []
-    X_curr = list(X_init[-model['ar_params'].shape[1]:])
+    """
+    Prediksi n_steps ke depan menggunakan komponen utama dari model MAR-GED.
+    """
+    ar_params = model['ar_params']
+    weights = model['weights']
+    sigmas = model['sigmas']
+    betas = model['beta']
+    p = ar_params.shape[1]
 
-    # Gunakan komponen dengan weight terbesar
-    main_comp = np.argmax(model['weights'])
-    phi = model['ar_params'][main_comp]
+    main_k = np.argmax(weights)
+    phi = ar_params[main_k]
+    sigma = sigmas[main_k]
+    beta = betas[main_k]
+
+    preds = []
+    X_curr = list(X_init[-p:])
+
+    np.random.seed(42)  # agar hasil reproducible
 
     for _ in range(n_steps):
-        x_input = np.array(X_curr[-len(phi):])
-        next_val = np.dot(phi, x_input)
-        pred.append(next_val)
+        x_lag = np.array(X_curr[-p:])[::-1]  # gunakan urutan lag terbaru ke lama
+        next_val = np.dot(phi, x_lag)
+        noise = gennorm.rvs(beta, loc=0, scale=sigma)
+        next_val += noise
+        preds.append(next_val)
         X_curr.append(next_val)
 
-    return np.array(pred)
+    return np.array(preds)
 
 if menu == "Model":
     st.title("🏗️ Pemodelan Mixture Autoregressive (MAR)")
