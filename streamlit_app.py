@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 from sklearn.cluster import KMeans
 from scipy.stats import gennorm, norm, kstest
-from statsmodels.api import add_constant
+from statsmodels.tools.tools import add_constant
 from statsmodels.stats.diagnostic import acorr_ljungbox, het_white
 from statsmodels.graphics.tsaplots import plot_acf
 from statsmodels.tsa.stattools import adfuller
