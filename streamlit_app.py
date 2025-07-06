@@ -601,13 +601,13 @@ if menu == "Prediksi dan Visualisasi":
     model_type = st.session_state['model_type']
     log_return = st.session_state['log_return']
     df = st.session_state['original_df']
-    selected_col = st.session_state['selected_price_col']
+    selected_price_col = st.session_state['selected_price_col']
 
-    if selected_col not in df.columns:
+    if selected_price_col not in df.columns:
         st.error("Kolom harga tidak ditemukan dalam data asli.")
         st.stop()
 
-    harga_terakhir = df.iloc[-1][selected_col]
+    harga_terakhir = df.iloc[-1][selected_price_col]
 
     n_steps = st.slider("🔢 Jumlah Hari Prediksi:", 5, 60, 30)
 
