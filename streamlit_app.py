@@ -206,269 +206,87 @@ elif menu == "Stasioneritas":
         st.error("❌ Log return **tidak stasioner** (p-value ≥ 0.05 → gagal tolak H0: ada akar unit).")
 
 # ----------------- Halaman Model -----------------
-elif menu == "Model":
-    st.title("🔧 Pemodelan MAR-Normal / MAR-GED")
+elif menu == "Prediksi dan Visualisasi":
+    st.title("📊 Prediksi dan Visualisasi")
 
-    if 'log_return' not in st.session_state or 'selected_price_col' not in st.session_state:
-        st.warning("Silakan lakukan preprocessing terlebih dahulu untuk mendapatkan log return.")
+    if 'model_type' not in st.session_state or 'log_return' not in st.session_state:
+        st.warning("Model belum dilatih atau data log return tidak tersedia. Silakan jalankan training terlebih dahulu.")
         st.stop()
 
-    log_return = st.session_state['log_return']
+    model_type = st.session_state['model_type']
+    log_return = st.session_state['log_return'].dropna()
     selected_col = st.session_state['selected_price_col']
+    df = st.session_state['df']
 
-    st.markdown("### 📌 Pilih Distribusi untuk Model MAR")
-    dist_type = st.radio("Distribusi komponen MAR", ["Normal", "GED"])
-    st.session_state['model_type'] = f"MAR-{dist_type}"
+    st.markdown(f"### 🔮 Prediksi Harga dengan **{model_type}**")
+    n_steps = st.number_input("Jumlah langkah prediksi ke depan (hari):", min_value=1, max_value=365, value=30)
 
-    max_p = st.number_input("Maksimal Ordo AR (p)", min_value=1, value=2, step=1)
-    max_K = st.number_input("Maksimal Jumlah Komponen (K)", min_value=1, value=3, step=1)
+    # Tombol Prediksi
+    if st.button("📈 Prediksi"):
+        st.info("⏳ Sedang memproses prediksi...")
 
-    if st.button("🔍 Cari Struktur Terbaik (EM + BIC)"):
-        X = log_return.dropna().values
+        # Fungsi prediksi MAR-Normal
+        def predict_mar_normal(model, X_init, n_steps=30):
+            ar_params = model['ar_params']
+            weights = model['weights']
+            p = ar_params.shape[1]
+            main_k = np.argmax(weights)
+            phi = ar_params[main_k]
+            preds = []
+            X_curr = list(X_init[-p:])
+            for _ in range(n_steps):
+                x_lag = np.array(X_curr[-p:])[::-1]
+                next_val = np.dot(phi, x_lag)
+                preds.append(next_val)
+                X_curr.append(next_val)
+            return np.array(preds)
 
-        if dist_type == "Normal":
-            st.info("🔄 Menjalankan EM untuk MAR-Normal...")
-            # ------ MAR-Normal Functions ------
-            from sklearn.cluster import KMeans
-            import numpy as np
+        # Fungsi prediksi MAR-GED
+        def predict_mar_ged(model, X_init, n_steps=30):
+            pred = []
+            X_curr = list(X_init[-model['ar_params'].shape[1]:])
+            main_comp = np.argmax(model['weights'])
+            phi = model['ar_params'][main_comp]
+            sigma = model['sigmas'][main_comp]
+            beta = model['beta'][main_comp]
+            np.random.seed(42)
+            for _ in range(n_steps):
+                next_val = np.dot(phi, X_curr[-len(phi):])
+                noise = gennorm.rvs(beta, loc=0, scale=sigma)
+                next_val += noise
+                pred.append(next_val)
+                X_curr.append(next_val)
+            return np.array(pred)
 
-            def initialize_parameters_mar_normal(X, p, K):
-                N = len(X)
-                weights = np.full(K, 1 / K)
-                km = KMeans(n_clusters=K, random_state=42).fit(X[p:].reshape(-1, 1))
-                labels = km.labels_
-
-                ar_params = np.zeros((K, p))
-                sigmas = np.zeros(K)
-
-                for k in range(K):
-                    idx = np.where(labels == k)[0]
-                    X_k = np.array([X[i - p:i] for i in idx + p if i >= p])
-                    y_k = X[idx + p][idx + p >= p]
-
-                    if len(y_k) == 0:
-                        ar_params[k] = np.zeros(p)
-                        sigmas[k] = np.std(X)
-                    else:
-                        beta_hat = np.linalg.lstsq(X_k, y_k, rcond=None)[0]
-                        residuals = y_k - X_k @ beta_hat
-                        ar_params[k] = beta_hat
-                        sigmas[k] = np.std(residuals) + 1e-6
-
-                return weights, ar_params, sigmas
-
-            def em_mar_normal(X, p, K, max_iter=100, tol=1e-6):
-                N = len(X)
-                X_lagged = np.array([X[i - p:i] for i in range(p, N)])
-                y = X[p:]
-
-                weights, ar_params, sigmas = initialize_parameters_mar_normal(X, p, K)
-                loglik_old = -np.inf
-
-                for iteration in range(max_iter):
-                    pdfs = np.zeros((N - p, K))
-                    for k in range(K):
-                        mu = X_lagged @ ar_params[k]
-                        std = sigmas[k]
-                        pdfs[:, k] = weights[k] * (1 / (np.sqrt(2 * np.pi) * std)) * np.exp(-0.5 * ((y - mu) / std) ** 2)
-
-                    responsibilities = pdfs / (pdfs.sum(axis=1, keepdims=True) + 1e-12)
-
-                    for k in range(K):
-                        r_k = responsibilities[:, k]
-                        N_k = r_k.sum()
-                        weights[k] = N_k / (N - p)
-
-                        W = np.diag(r_k)
-                        XWX = X_lagged.T @ W @ X_lagged
-                        XWy = X_lagged.T @ W @ y
-                        try:
-                            ar_params[k] = np.linalg.solve(XWX + 1e-6 * np.eye(p), XWy)
-                        except np.linalg.LinAlgError:
-                            ar_params[k] = np.zeros(p)
-
-                        residuals = y - X_lagged @ ar_params[k]
-                        sigmas[k] = np.sqrt(np.sum(r_k * residuals ** 2) / N_k) + 1e-6
-
-                    loglik = np.sum(np.log(pdfs.sum(axis=1) + 1e-12))
-                    if np.abs(loglik - loglik_old) < tol:
-                        break
-                    loglik_old = loglik
-
-                num_params = (K - 1) + K * (p + 1)
-                bic = -2 * loglik + num_params * np.log(N - p)
-
-                return {
-                    'weights': weights,
-                    'ar_params': ar_params,
-                    'sigmas': sigmas,
-                    'log_likelihood': loglik,
-                    'bic': bic
-                }
-
-            def best_structure_mar_normal(X, max_p=5, max_K=5):
-                best_model = None
-                best_bic = np.inf
-                best_p, best_k = None, None
-                bic_matrix = {}
-
-                for p in range(1, max_p + 1):
-                    for K in range(1, max_K + 1):
-                        try:
-                            model = em_mar_normal(X, p, K)
-                            bic = model['bic']
-                            bic_matrix[(p, K)] = bic
-                            if bic < best_bic:
-                                best_bic = bic
-                                best_model = model
-                                best_p = p
-                                best_k = K
-                        except Exception as e:
-                            st.warning(f"❌ Gagal pada p={p}, K={K} → {str(e)}")
-                            continue
-
-                return {
-                    'best_p': best_p,
-                    'best_k': best_k,
-                    'best_model': best_model,
-                    'bic_matrix': bic_matrix
-                }
-
-            result = best_structure_mar_normal(X, max_p=max_p, max_K=max_K)
-
+        # Jalankan prediksi sesuai model
+        if model_type == "MAR-Normal":
+            model = st.session_state['best_model']
+            pred_log_return = predict_mar_normal(model, log_return.values, n_steps=n_steps)
+        elif model_type == "MAR-GED":
+            model = st.session_state['best_model_ged']
+            pred_log_return = predict_mar_ged(model, log_return.values, n_steps=n_steps)
         else:
-            st.info("🔄 Menjalankan EM untuk MAR-GED...")
-            # ------ MAR-GED Functions ------
-            from sklearn.cluster import KMeans
-            from scipy.stats import gennorm
-            import numpy as np
+            st.error("Model tidak dikenali.")
+            st.stop()
 
-            def initialize_parameters_mar_ged(X, p, K):
-                N = len(X)
-                weights = np.full(K, 1 / K)
-                km = KMeans(n_clusters=K, random_state=42).fit(X[p:].reshape(-1, 1))
-                labels = km.labels_
+        # Transformasi log-return → harga
+        last_price = df[selected_col].dropna().iloc[-1]
+        future_prices = [last_price]
+        for r in pred_log_return:
+            future_prices.append(future_prices[-1] * np.exp(r))
+        future_prices = future_prices[1:]
 
-                ar_params = np.zeros((K, p))
-                sigmas = np.zeros(K)
-                betas = np.full(K, 2.0)
-
-                for k in range(K):
-                    idx = np.where(labels == k)[0]
-                    X_k = np.array([X[i - p:i] for i in idx + p if i >= p])
-                    y_k = X[idx + p][idx + p >= p]
-
-                    if len(y_k) == 0:
-                        ar_params[k] = np.zeros(p)
-                        sigmas[k] = np.std(X)
-                    else:
-                        beta_hat = np.linalg.lstsq(X_k, y_k, rcond=None)[0]
-                        residuals = y_k - X_k @ beta_hat
-                        ar_params[k] = beta_hat
-                        sigmas[k] = np.std(residuals) + 1e-6
-
-                return weights, ar_params, sigmas, betas
-
-            def em_mar_ged(X, p, K, max_iter=100, tol=1e-6):
-                N = len(X)
-                X_lagged = np.array([X[i - p:i] for i in range(p, N)])
-                y = X[p:]
-
-                weights, ar_params, sigmas, betas = initialize_parameters_mar_ged(X, p, K)
-                loglik_old = -np.inf
-
-                for iteration in range(max_iter):
-                    pdfs = np.zeros((N - p, K))
-                    for k in range(K):
-                        mu = X_lagged @ ar_params[k]
-                        scale = sigmas[k]
-                        beta = betas[k]
-                        pdfs[:, k] = weights[k] * gennorm.pdf(y, beta, loc=mu, scale=scale)
-
-                    responsibilities = pdfs / (pdfs.sum(axis=1, keepdims=True) + 1e-12)
-
-                    for k in range(K):
-                        r_k = responsibilities[:, k]
-                        N_k = r_k.sum()
-                        weights[k] = N_k / (N - p)
-
-                        W = np.diag(r_k)
-                        XWX = X_lagged.T @ W @ X_lagged
-                        XWy = X_lagged.T @ W @ y
-                        try:
-                            ar_params[k] = np.linalg.solve(XWX + 1e-6 * np.eye(p), XWy)
-                        except np.linalg.LinAlgError:
-                            ar_params[k] = np.zeros(p)
-
-                        mu_k = X_lagged @ ar_params[k]
-                        residuals = y - mu_k
-                        sigmas[k] = np.sqrt(np.sum(r_k * residuals**2) / N_k) + 1e-6
-                        betas[k] = 1.5 + np.random.rand()  # sementara
-
-                    loglik = np.sum(np.log(pdfs.sum(axis=1) + 1e-12))
-                    if np.abs(loglik - loglik_old) < tol:
-                        break
-                    loglik_old = loglik
-
-                num_params = (K - 1) + K * (p + 2)
-                bic = -2 * loglik + num_params * np.log(N - p)
-
-                return {
-                    'weights': weights,
-                    'ar_params': ar_params,
-                    'sigmas': sigmas,
-                    'beta': betas,
-                    'log_likelihood': loglik,
-                    'bic': bic
-                }
-
-            def best_structure_mar_ged(X, max_p=5, max_K=5):
-                best_model = None
-                best_bic = np.inf
-                best_p, best_k = None, None
-                bic_matrix = {}
-
-                for p in range(1, max_p + 1):
-                    for K in range(1, max_K + 1):
-                        try:
-                            model = em_mar_ged(X, p, K)
-                            bic = model['bic']
-                            bic_matrix[(p, K)] = bic
-                            if bic < best_bic:
-                                best_bic = bic
-                                best_model = model
-                                best_p = p
-                                best_k = K
-                        except Exception as e:
-                            st.warning(f"❌ Gagal pada p={p}, K={K} → {str(e)}")
-                            continue
-
-                return {
-                    'best_p': best_p,
-                    'best_k': best_k,
-                    'best_model': best_model,
-                    'bic_matrix': bic_matrix
-                }
-
-            result = best_structure_mar_ged(X, max_p=max_p, max_K=max_K)
+        future_dates = pd.date_range(start=df.index[-1], periods=n_steps + 1, freq='D')[1:]
+        df_future = pd.DataFrame({'Tanggal': future_dates, 'Prediksi Harga': future_prices}).set_index('Tanggal')
 
         # Tampilkan hasil
-        if result['best_model']:
-            st.success(f"✅ Struktur terbaik: p={result['best_p']}, K={result['best_k']}")
-            st.write(f"Log-Likelihood: {result['best_model']['log_likelihood']:.2f}")
-            st.write(f"BIC: {result['best_model']['bic']:.2f}")
+        st.success("✅ Prediksi selesai!")
+        st.line_chart(df_future)
+        st.dataframe(df_future)
 
-            for j in range(result['best_k']):
-                st.markdown(f"#### Komponen {j+1}")
-                st.write(f"Koefisien AR: {result['best_model']['ar_params'][j]}")
-                st.write(f"Sigma²: {result['best_model']['sigmas'][j]**2:.6f}")
-                if dist_type == "GED":
-                    st.write(f"Beta (GED): {result['best_model']['beta'][j]:.4f}")
-                st.write(f"Proporsi: {result['best_model']['weights'][j]:.4f}")
-        else:
-            st.error("⚠️ Tidak ada model yang berhasil diestimasi.")
-                    
-# ----------------- Halaman Prediksi dan Visualisasi -----------------
+        # Simpan prediksi ke session_state (jika ingin dipakai di halaman lain)
+        st.session_state['prediksi_harga'] = df_future
+        
 # ----------------- Halaman Prediksi dan Visualisasi -----------------
 elif menu == "Prediksi dan Visualisasi":
     st.title("📊 Prediksi dan Visualisasi")
