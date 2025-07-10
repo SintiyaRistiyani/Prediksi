@@ -140,6 +140,7 @@ elif menu == "Stasioneritas":
 
     train = st.session_state['train']
     harga_col = st.session_state['harga_col']
+diagnostik_saham(train['Log Return'], harga_col)
 
     # === Fungsi Uji ADF ===
     from statsmodels.tsa.stattools import adfuller
@@ -173,6 +174,10 @@ from scipy.stats import skew, kurtosis, shapiro, jarque_bera
 def diagnostik_saham(series, nama_saham):
     st.markdown(f"## 🧪 Uji Diagnostik Distribusi: {nama_saham}")
     series = series.dropna()
+
+if 'train' not in st.session_state or 'harga_col' not in st.session_state:
+    st.warning("Silakan lakukan preprocessing terlebih dahulu.")
+    st.stop()
     
     # Skewness & Kurtosis
     skw = skew(series)
@@ -187,7 +192,6 @@ def diagnostik_saham(series, nama_saham):
     ax.set_xlabel('Log Return')
     ax.set_ylabel('Frekuensi')
     st.pyplot(fig)
-diagnostik_saham(st.session_state['train']['Log Return'], st.session_state['harga_col'])
 
 # ----------------- Halaman Model -----------------
 if menu == "Model":
