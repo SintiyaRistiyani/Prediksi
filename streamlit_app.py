@@ -167,29 +167,25 @@ elif menu == "Stasioneritas":
     ax[1].set_title("PACF")
     st.pyplot(fig)
 
-    # === Uji Diagnostik Distribusi ===
-    from scipy.stats import skew, kurtosis
-    import seaborn as sns
+from scipy.stats import skew, kurtosis, shapiro, jarque_bera
 
-    def diagnostik_saham(series, nama_saham):
-        st.markdown(f"### 🧪 Uji Diagnostik Distribusi: {nama_saham}")
-        series = series.dropna()
+def diagnostik_saham(series, nama_saham):
+    st.markdown(f"## 🧪 Uji Diagnostik Distribusi: {nama_saham}")
+    series = series.dropna()
 
-        # Skewness & Kurtosis
-        skw = skew(series)
-        krt = kurtosis(series)
-        st.write(f"**Skewness:** {skw:.4f}")
-        st.write(f"**Kurtosis:** {krt:.4f}")
+    # Skewness & Kurtosis
+    skw = skew(series)
+    krt = kurtosis(series)
+    st.write(f"**Skewness:** {skw:.4f}")
+    st.write(f"**Kurtosis:** {krt:.4f}")
 
-        # Histogram + KDE
-        fig, ax = plt.subplots(figsize=(8, 4))
-        sns.histplot(series, kde=True, bins=30, color='skyblue', ax=ax)
-        ax.set_title(f'Distribusi Log Return {nama_saham}')
-        ax.set_xlabel('Log Return')
-        ax.set_ylabel('Frekuensi')
-        st.pyplot(fig)
-
-    diagnostik_saham(train['Log Return'], harga_col)
+    # Visualisasi histogram + KDE
+    fig, ax = plt.subplots(figsize=(10, 4))
+    sns.histplot(series, kde=True, bins=30, color='skyblue', ax=ax)
+    ax.set_title(f'Distribusi Log Return {nama_saham}')
+    ax.set_xlabel('Log Return')
+    ax.set_ylabel('Frekuensi')
+    st.pyplot(fig)
 
 # ----------------- Halaman Model -----------------
 # --- Inisialisasi parameter MAR-Normal ---
