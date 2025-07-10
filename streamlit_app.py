@@ -214,3 +214,87 @@ def diagnostik_saham(series, nama_saham):
     ax.set_ylabel('Frekuensi')
     st.pyplot(fig)
 
+# =============================== MODEL ==============================
+elif menu == "Model":
+    st.title("🏗️ Pemodelan Mixture Autoregressive (MAR)")
+
+    if 'log_return_train' not in st.session_state:
+        st.warning("Lakukan preprocessing terlebih dahulu.")
+        st.stop()
+
+    X = st.session_state['log_return_train'].values
+
+    model_choice = st.selectbox("Pilih Jenis Model:", ["MAR-Normal", "MAR-GED"])
+    metode_pemodelan = st.radio("Pilih Metode Pemodelan:", ["Otomatis (EM + BIC)", "Manual"])
+
+    if metode_pemodelan == "Otomatis (EM + BIC)":
+        max_p = st.slider("Max order p:", 1, 5, 3)
+        max_K = st.slider("Max jumlah komponen K:", 1, 5, 3)
+
+        if st.button("🔁 Cari Struktur Terbaik (p & K)"):
+            with st.spinner("Mencari struktur terbaik..."):
+                if model_choice == "MAR-Normal":
+                    _, best_p, best_k = best_structure_mar_normal(X, max_p, max_K)
+                else:
+                    _, best_p, best_k = best_structure_mar_ged(X, max_p, max_K)
+
+                if best_p and best_k:
+                    st.success(f"Struktur terbaik: p = {best_p}, K = {best_k}")
+                    st.session_state['selected_p'] = best_p
+                    st.session_state['selected_k'] = best_k
+                    st.session_state['model_type'] = model_choice
+                else:
+                    st.error("Gagal menentukan struktur terbaik.")
+
+        if 'selected_p' in st.session_state and 'selected_k' in st.session_state:
+            best_p = st.session_state['selected_p']
+            best_k = st.session_state['selected_k']
+            if st.button("📌 Latih Model dengan p & K Terbaik"):
+                with st.spinner("Melatih model final..."):
+                    if model_choice == "MAR-Normal":
+                        model = em_mar_normal(X, best_p, best_k)
+                        st.session_state['best_model'] = model
+                        st.session_state['best_p'] = best_p
+                        st.session_state['best_k'] = best_k
+                        st.session_state['model_type'] = "MAR-Normal"
+                        st.session_state['ar_params'] = model['ar_params']
+                        st.session_state['sigmas'] = model['sigmas']
+                        st.session_state['weights'] = model['weights']
+                    else:
+                        model = em_mar_ged(X, best_p, best_k)
+                        st.session_state['best_model_ged'] = model
+                        st.session_state['best_p_ged'] = best_p
+                        st.session_state['best_k_ged'] = best_k
+                        st.session_state['model_type'] = "MAR-GED"
+                        st.session_state['ar_params'] = model['ar_params']
+                        st.session_state['sigmas'] = model['sigmas']
+                        st.session_state['weights'] = model['weights']
+                    st.success(f"Model dilatih: p = {best_p}, K = {best_k}")
+
+    elif metode_pemodelan == "Manual":
+        p_manual = st.number_input("Masukkan ordo AR (p):", min_value=1, max_value=5, value=1)
+        K_manual = st.number_input("Masukkan jumlah komponen (K):", min_value=1, max_value=5, value=2)
+
+        if st.button("🧠 Latih Model Secara Manual"):
+            with st.spinner("Melatih model dengan parameter manual..."):
+                if model_choice == "MAR-Normal":
+                    model = em_mar_normal(X, p_manual, K_manual)
+                    st.session_state['best_model'] = model
+                    st.session_state['best_p'] = p_manual
+                    st.session_state['best_k'] = K_manual
+                    st.session_state['model_type'] = "MAR-Normal"
+                    st.session_state['ar_params'] = model['ar_params']
+                    st.session_state['sigmas'] = model['sigmas']
+                    st.session_state['weights'] = model['weights']
+                else:
+                    model = em_mar_ged(X, p_manual, K_manual)
+                    st.session_state['best_model_ged'] = model
+                    st.session_state['best_p_ged'] = p_manual
+                    st.session_state['best_k_ged'] = K_manual
+                    st.session_state['model_type'] = "MAR-GED"
+                    st.session_state['ar_params'] = model['ar_params']
+                    st.session_state['sigmas'] = model['sigmas']
+                    st.session_state['weights'] = model['weights']
+                st.success(f"Model dilatih: p = {p_manual}, K = {K_manual}")
+
+# =================== PREDIKSI DAN VISUALISASI===========================
