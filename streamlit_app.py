@@ -187,7 +187,7 @@ def diagnostik_saham(series, nama_saham):
     ax.set_xlabel('Log Return')
     ax.set_ylabel('Frekuensi')
     st.pyplot(fig)
-diagnostik_saham(train['Log Return'], harga_col)
+    diagnostik_saham(st.session_state['train']['Log Return'], st.session_state['harga_col'])
 
 # ----------------- Halaman Model -----------------
 if menu == "Model":
