@@ -140,7 +140,9 @@ elif menu == "Stasioneritas":
 
     train = st.session_state['train']
     harga_col = st.session_state['harga_col']
-diagnostik_saham(train['Log Return'], harga_col)
+    
+    # Panggil fungsi dengan log return dari data train
+    diagnostik_saham(train['Log Return'], harga_col)
 
     # === Fungsi Uji ADF ===
     from statsmodels.tsa.stattools import adfuller
