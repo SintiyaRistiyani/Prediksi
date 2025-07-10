@@ -74,6 +74,7 @@ elif menu == "Input Data":
                                           .str.replace('[^0-9.-]', '', regex=True),
                                           errors='coerce')
             df = df.dropna(subset=[harga_col])
+            date_col = st.selectbox("Pilih kolom tanggal:",df.columns)
             st.session_state['df'] = df
             st.session_state['harga_col'] = harga_col
             st.dataframe(df.head())
