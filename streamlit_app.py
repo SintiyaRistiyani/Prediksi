@@ -119,6 +119,7 @@ elif menu == "Data Preprocessing":
     st.markdown("### Split Data (Train/Test)")
     n_test = 30
     train, test = df[:-n_test], df[-n_test:]
+    st.session_state['log_return_train'] = train['Log Return']
     st.session_state['train'] = train
     st.session_state['test'] = test
 
