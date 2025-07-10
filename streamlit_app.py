@@ -67,6 +67,7 @@ elif menu == "Input Data":
             df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
             df = df.dropna(subset=['Date']).sort_values('Date')
             harga_col = st.selectbox("Pilih kolom harga:", df.columns)
+            date_col = st.selectbox("Pilih kolom tanggal:",df.columns)
             df[harga_col] = pd.to_numeric(df[harga_col]
                                           .astype(str)
                                           .str.replace('.', '', regex=False)
@@ -74,7 +75,6 @@ elif menu == "Input Data":
                                           .str.replace('[^0-9.-]', '', regex=True),
                                           errors='coerce')
             df = df.dropna(subset=[harga_col])
-            date_col = st.selectbox("Pilih kolom tanggal:",df.columns)
             st.session_state['df'] = df
             st.session_state['harga_col'] = harga_col
             st.dataframe(df.head())
