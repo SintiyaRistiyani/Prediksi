@@ -43,7 +43,7 @@ menu = st.sidebar.radio("Pilih Halaman:", (
 
 # ----------------- Halaman Home -----------------
 if menu == "Home":
-    st.title("📈 Aplikasi Prediksi Harga Saham Menggunakan Model Mixture Autoregressive (MAR)")
+    st.title("Aplikasi Prediksi Harga Saham Menggunakan Model Mixture Autoregressive (MAR)")
     st.markdown("""
         Selamat datang di aplikasi prediksi harga saham berbasis **Streamlit**.  
         Silakan gunakan menu di samping untuk mengakses berbagai fitur mulai dari input data hingga interpretasi hasil model.
@@ -83,7 +83,7 @@ elif menu == "Input Data":
             
 # ----------------- Halaman Preprocessing -----------------
 elif menu == "Data Preprocessing":
-    st.title("⚙️ Preprocessing Data")
+    st.title("Preprocessing Data")
     if 'df' not in st.session_state:
         st.warning("Upload data terlebih dahulu.")
         st.stop()
@@ -102,10 +102,10 @@ elif menu == "Data Preprocessing":
     df = df.dropna().reset_index(drop=True)
 
     # Tampilkan tabel 5 baris teratas log return
-    st.markdown("### 📄 Tabel 5 Baris Pertama Log Return")
+    st.markdown("### Tabel 5 Baris Pertama Log Return")
     st.dataframe(df[['Date', harga_col, 'Log Return']].head())
            # ----------------- Split Data -----------------
-    st.markdown("### ✂️ Split Data (Train/Test)")
+    st.markdown("### Split Data (Train/Test)")
     n_test = 30
     train, test = df[:-n_test], df[-n_test:]
     st.session_state['train'], st.session_state['test'] = train, test
@@ -113,8 +113,8 @@ elif menu == "Data Preprocessing":
                    'Test': test.set_index('Date')['Log Return']})
 
 # ----------------- Halaman Uji Stasioneritas -----------------
-elif menu == "Uji Stasioneritas":
-    st.title("📉 Uji Stasioneritas")
+elif menu == "Stasioneritas":
+    st.title("Uji Stasioneritas")
     if 'train' not in st.session_state:
         st.warning("Lakukan preprocessing terlebih dahulu.")
         st.stop()
@@ -122,7 +122,7 @@ elif menu == "Uji Stasioneritas":
     adf_result = check_stationarity(train['Log Return'])
     st.write(f"ADF Statistic: {adf_result[0]:.4f}")
     st.write(f"p-value: {adf_result[1]:.4f}")
-    st.write("Kesimpulan:", "✅ Stasioner" if adf_result[1] < 0.05 else "❌ Tidak Stasioner")
+    st.write("Kesimpulan:", "Stasioner" if adf_result[1] < 0.05 else "Tidak Stasioner")
     fig, ax = plt.subplots(1, 2, figsize=(12, 4))
     plot_acf(train['Log Return'], ax=ax[0], lags=20)
     plot_pacf(train['Log Return'], ax=ax[1], lags=20, method='ywm')
