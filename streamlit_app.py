@@ -86,39 +86,48 @@ elif menu == "Input Data":
             
 # ----------------- Halaman Preprocessing -----------------
 elif menu == "Data Preprocessing":
-    st.title("Preprocessing Data")
-    if 'df' not in st.session_state:
+    st.title("⚙️ Preprocessing Data")
+
+    if 'df' not in st.session_state or 'harga_col' not in st.session_state:
         st.warning("Upload data terlebih dahulu.")
         st.stop()
-    df = st.session_state['df']
-    
+
+    df = st.session_state['df'].copy()
+    harga_col = st.session_state['harga_col']
+
+    # Fungsi format ke rupiah Indonesia (29.153,00)
     def format_harga_idr(x):
         return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    df['Harga Format'] = df[harga_col].apply(format_harga_idr)
-    harga_col = st.session_state['harga_col']
-    df['Log Return'] = np.log(df[harga_col] / df[harga_col].shift(1))
-    df = df.dropna()
 
-    # Validasi kolom harga
-    if harga_col not in df.columns:
-        st.error(f"Kolom '{harga_col}' tidak ditemukan dalam data.")
-        st.stop()
+    # Bersihkan kolom harga (jika masih format "29.153,00" → float)
+    def clean_price_column(series):
+        return series.astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
+
+    # Bersihkan dan hitung log return
+    df[harga_col] = clean_price_column(df[harga_col])
+    df['Harga Format'] = df[harga_col].apply(format_harga_idr)
 
     # Hitung log return
     df['Log Return'] = np.log(df[harga_col] / df[harga_col].shift(1))
     df = df.dropna().reset_index(drop=True)
 
-    # Tampilkan tabel 5 baris teratas log return
-    st.markdown("### Tabel 5 Baris Pertama Log Return")
-    st.dataframe(df[['Date', harga_col, 'Log Return']].head())
-           # ----------------- Split Data -----------------
+    # Tampilkan tabel 5 baris pertama
+    st.markdown("###Tabel 5 Baris Pertama")
+    st.dataframe(df[['Date', 'Harga Format', 'Log Return']].head())
+
+    # ----------------- Split Data -----------------
     st.markdown("### Split Data (Train/Test)")
     n_test = 30
     train, test = df[:-n_test], df[-n_test:]
-    st.session_state['train'], st.session_state['test'] = train, test
-    st.line_chart({'Train': train.set_index('Date')['Log Return'],
-                   'Test': test.set_index('Date')['Log Return']})
+    st.session_state['train'] = train
+    st.session_state['test'] = test
 
+    # Visualisasi log return
+    st.line_chart({
+        'Train': train.set_index('Date')['Log Return'],
+        'Test': test.set_index('Date')['Log Return']
+    })
+    
 # ----------------- Halaman Uji Stasioneritas -----------------
 elif menu == "Stasioneritas":
     st.title("📉 Uji Stasioneritas dan Diagnostik Distribusi")
