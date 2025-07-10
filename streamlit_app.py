@@ -117,15 +117,36 @@ elif menu == "Data Preprocessing":
 
 # ----------------- Halaman Uji Stasioneritas -----------------
 elif menu == "Stasioneritas":
-    st.title("Uji Stasioneritas")
-    if 'train' not in st.session_state:
-        st.warning("Lakukan preprocessing terlebih dahulu.")
+    st.title("📉 Uji Stasioneritas dan Diagnostik Distribusi")
+
+    # Validasi data
+    if 'train' not in st.session_state or 'harga_col' not in st.session_state:
+        st.warning("Silakan lakukan preprocessing terlebih dahulu.")
         st.stop()
+
     train = st.session_state['train']
+    harga_col = st.session_state['harga_col']
+
+    # === Fungsi Uji ADF ===
+    from statsmodels.tsa.stattools import adfuller
+
+    def check_stationarity(series):
+        result = adfuller(series.dropna())
+        return result
+
+    # Hitung ADF
     adf_result = check_stationarity(train['Log Return'])
-    st.write(f"ADF Statistic: {adf_result[0]:.4f}")
-    st.write(f"p-value: {adf_result[1]:.4f}")
-    st.write("Kesimpulan:", "Stasioner" if adf_result[1] < 0.05 else "Tidak Stasioner")
+    st.markdown("### 🔍 Hasil Uji ADF")
+    st.write(f"**ADF Statistic:** {adf_result[0]:.4f}")
+    st.write(f"**p-value:** {adf_result[1]:.4f}")
+    st.write("**Kesimpulan:**", 
+             "✅ Stasioner (p < 0.05)" if adf_result[1] < 0.05 else "⚠️ Tidak Stasioner (p ≥ 0.05)")
+
+    # === Plot ACF & PACF ===
+    from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+    import matplotlib.pyplot as plt
+
+    st.markdown("### 🔁 ACF dan PACF Plot")
     fig, ax = plt.subplots(1, 2, figsize=(12, 4))
     plot_acf(train['Log Return'], ax=ax[0], lags=20)
     plot_pacf(train['Log Return'], ax=ax[1], lags=20, method='ywm')
@@ -134,7 +155,10 @@ elif menu == "Stasioneritas":
     st.pyplot(fig)
 
     # === Uji Diagnostik Distribusi ===
-def diagnostik_saham(series, nama_saham):
+    from scipy.stats import skew, kurtosis
+    import seaborn as sns
+
+    def diagnostik_saham(series, nama_saham):
         st.markdown(f"### 🧪 Uji Diagnostik Distribusi: {nama_saham}")
         series = series.dropna()
 
@@ -153,6 +177,7 @@ def diagnostik_saham(series, nama_saham):
         st.pyplot(fig)
 
     diagnostik_saham(train['Log Return'], harga_col)
+
 # ----------------- Halaman Model -----------------
 # --- Inisialisasi parameter MAR-Normal ---
 def initialize_parameters_mar_normal(X, p, K):
