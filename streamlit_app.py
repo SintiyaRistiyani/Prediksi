@@ -194,9 +194,9 @@ elif menu == "Stasioneritas":
     ax[1].set_title("PACF")
     st.pyplot(fig)
 
-from scipy.stats import skew, kurtosis, shapiro, jarque_bera
+    from scipy.stats import skew, kurtosis, shapiro, jarque_bera
 
-def diagnostik_saham(series, nama_saham):
+    def diagnostik_saham(series, nama_saham):
     st.markdown(f"## 🧪 Uji Diagnostik Distribusi: {nama_saham}")
     series = series.dropna()
     
