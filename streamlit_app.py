@@ -80,7 +80,7 @@ elif menu == "Input Data":
             st.dataframe(df.head())
         except Exception as e:
             st.error(f"Error: {e}")
-
+            
 # ----------------- Halaman Preprocessing -----------------
 elif menu == "Data Preprocessing":
     st.title("⚙️ Preprocessing Data")
@@ -91,6 +91,19 @@ elif menu == "Data Preprocessing":
     harga_col = st.session_state['harga_col']
     df['Log Return'] = np.log(df[harga_col] / df[harga_col].shift(1))
     df = df.dropna()
+
+    # Validasi kolom harga
+    if harga_col not in df.columns:
+        st.error(f"Kolom '{harga_col}' tidak ditemukan dalam data.")
+        st.stop()
+
+    # Hitung log return
+    df['Log Return'] = np.log(df[harga_col] / df[harga_col].shift(1))
+    df = df.dropna().reset_index(drop=True)
+
+    # Tampilkan tabel 5 baris teratas log return
+    st.markdown("### 📄 Tabel 5 Baris Pertama Log Return")
+    st.dataframe(df[['Date', harga_col, 'Log Return']].head())
            # ----------------- Split Data -----------------
     st.markdown("### ✂️ Split Data (Train/Test)")
     n_test = 30
