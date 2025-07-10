@@ -112,8 +112,8 @@ elif menu == "Data Preprocessing":
     df = df.dropna().reset_index(drop=True)
 
     # Tampilkan tabel 5 baris pertama
-    st.markdown("###Tabel 5 Baris Pertama")
-    st.dataframe(df[['Date', 'Harga Format', 'Log Return']].head())
+    st.markdown("### Tabel 5 Baris Pertama")
+    st.dataframe(df[['Date', 'Harga', 'Log Return']].head())
 
     # ----------------- Split Data -----------------
     st.markdown("### Split Data (Train/Test)")
