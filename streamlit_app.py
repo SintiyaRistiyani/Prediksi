@@ -173,7 +173,8 @@ from scipy.stats import skew, kurtosis, shapiro, jarque_bera
 def diagnostik_saham(series, nama_saham):
     st.markdown(f"## 🧪 Uji Diagnostik Distribusi: {nama_saham}")
     series = series.dropna()
-
+    diagnostik_saham(train['Log Return'], harga_col)
+    
     # Skewness & Kurtosis
     skw = skew(series)
     krt = kurtosis(series)
@@ -187,7 +188,6 @@ def diagnostik_saham(series, nama_saham):
     ax.set_xlabel('Log Return')
     ax.set_ylabel('Frekuensi')
     st.pyplot(fig)
-    diagnostik_saham(train['Log Return'], harga_col)
 
 # ----------------- Halaman Model -----------------
 if menu == "Model":
