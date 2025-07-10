@@ -91,6 +91,9 @@ elif menu == "Data Preprocessing":
         st.warning("Upload data terlebih dahulu.")
         st.stop()
     df = st.session_state['df']
+    def format_harga_idr(x):
+    return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    df['Harga Format'] = df[harga_col].apply(format_harga_idr)
     harga_col = st.session_state['harga_col']
     df['Log Return'] = np.log(df[harga_col] / df[harga_col].shift(1))
     df = df.dropna()
