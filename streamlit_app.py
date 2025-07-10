@@ -134,7 +134,7 @@ elif menu == "Stasioneritas":
     st.pyplot(fig)
 
     # === Uji Diagnostik Distribusi ===
-def diagnostik_saham(series, nama_saham):
+    diagnostik_saham(series, nama_saham):
     st.markdown(f"#### Uji Diagnostik: {nama_saham}")
     series = series.dropna()
 
