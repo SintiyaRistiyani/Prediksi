@@ -31,6 +31,29 @@ def check_stationarity(series):
     result = adfuller(series.dropna())
     return result
 
+def diagnostik_saham(series, nama_saham):
+    st.markdown(f"## 🧪 Uji Diagnostik Distribusi: {nama_saham}")
+
+    if series is None or len(series) == 0:
+        st.warning("Series log return kosong.")
+        return
+
+    series = series.dropna()
+
+    # Skewness & Kurtosis
+    skw = skew(series)
+    krt = kurtosis(series)
+    st.write(f"**Skewness:** {skw:.4f}")
+    st.write(f"**Kurtosis:** {krt:.4f}")
+
+    # Visualisasi histogram + KDE
+    fig, ax = plt.subplots(figsize=(10, 4))
+    sns.histplot(series, kde=True, bins=30, color='skyblue', ax=ax)
+    ax.set_title(f'Distribusi Log Return {nama_saham}')
+    ax.set_xlabel('Log Return')
+    ax.set_ylabel('Frekuensi')
+    st.pyplot(fig)
+
 # ----------------- Sidebar Navigasi -----------------
 st.sidebar.title("📊 Navigasi")
 menu = st.sidebar.radio("Pilih Halaman:", (
@@ -176,10 +199,6 @@ from scipy.stats import skew, kurtosis, shapiro, jarque_bera
 def diagnostik_saham(series, nama_saham):
     st.markdown(f"## 🧪 Uji Diagnostik Distribusi: {nama_saham}")
     series = series.dropna()
-
-if 'train' not in st.session_state or 'harga_col' not in st.session_state:
-    st.warning("Silakan lakukan preprocessing terlebih dahulu.")
-    st.stop()
     
     # Skewness & Kurtosis
     skw = skew(series)
