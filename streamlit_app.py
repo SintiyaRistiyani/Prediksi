@@ -105,7 +105,7 @@ elif menu == "Data Preprocessing":
 
     # Bersihkan dan hitung log return
     df[harga_col] = clean_price_column(df[harga_col])
-    df['Harga Format'] = df[harga_col].apply(format_harga_idr)
+    df['Harga'] = df[harga_col].apply(format_harga_idr)
 
     # Hitung log return
     df['Log Return'] = np.log(df[harga_col] / df[harga_col].shift(1))
