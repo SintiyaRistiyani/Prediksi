@@ -196,14 +196,6 @@ if 'train' not in st.session_state or 'harga_col' not in st.session_state:
     st.pyplot(fig)
 
 # ----------------- Halaman Model -----------------
-if menu == "Model":
-    st.title("🏗️ Pemodelan Mixture Autoregressive (MAR)")
-
-    if 'log_return' not in st.session_state:
-        st.warning("Lakukan preprocessing terlebih dahulu.")
-        st.stop()
-
-    X = st.session_state['log_return_train'].values
 # --- Inisialisasi parameter MAR-Normal ---
 def initialize_parameters_mar_normal(X, p, K):
     N = len(X)
@@ -425,6 +417,15 @@ def predict_mar_normal(model, X_init, n_steps=30):
         X_curr.append(next_val)
 
     return np.array(preds)
+    
+if menu == "Model":
+    st.title("🏗️ Pemodelan Mixture Autoregressive (MAR)")
+    
+if 'log_return' not in st.session_state:
+        st.warning("Lakukan preprocessing terlebih dahulu.")
+        st.stop()
+
+    X = st.session_state['log_return_train'].values
 
 def predict_mar_ged(model, X_init, n_steps=30):
     """
