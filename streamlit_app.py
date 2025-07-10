@@ -443,7 +443,7 @@ if menu == "Model":
 if 'log_return' not in st.session_state:
         st.warning("Lakukan preprocessing terlebih dahulu.")
         st.stop()
-
+    
     X = st.session_state['log_return_train'].values
 
 def predict_mar_ged(model, X_init, n_steps=30):
