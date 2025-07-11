@@ -214,87 +214,137 @@ elif menu == "Stasioneritas":
         ax.set_ylabel('Frekuensi')
         st.pyplot(fig)
 
-# =============================== MODEL ==============================
+# ===================== MENU: Model =====================
 elif menu == "Model":
+
     st.title("🏗️ Pemodelan Mixture Autoregressive (MAR)")
 
+    # ------- pastikan data sudah ada ----------
     if 'log_return_train' not in st.session_state:
         st.warning("Lakukan preprocessing terlebih dahulu.")
         st.stop()
 
-    X = st.session_state['log_return_train'].values
+    series = st.session_state['log_return_train'].values
 
-    model_choice = st.selectbox("Pilih Jenis Model:", ["MAR-Normal", "MAR-GED"])
-    metode_pemodelan = st.radio("Pilih Metode Pemodelan:", ["Otomatis (EM + BIC)", "Manual"])
+    # 1. user pilih jenis distribusi
+    model_choice = st.selectbox("Jenis Distribusi Komponen:", 
+                                ["MAR-Normal", "MAR-GED"])
 
-    if metode_pemodelan == "Otomatis (EM + BIC)":
-        max_p = st.slider("Max order p:", 1, 5, 3)
-        max_K = st.slider("Max jumlah komponen K:", 1, 5, 3)
+    # 2. user masukkan orde AR (p) hasil observasi ACF‑PACF
+    p_input = st.number_input("Orde AR (p) hasil analisis ACF/PACF:", 
+                              min_value=1, max_value=5, value=1, step=1)
 
-        if st.button("🔁 Cari Struktur Terbaik (p & K)"):
-            with st.spinner("Mencari struktur terbaik..."):
-                if model_choice == "MAR-Normal":
-                    _, best_p, best_k = best_structure_mar_normal(X, max_p, max_K)
-                else:
-                    _, best_p, best_k = best_structure_mar_ged(X, max_p, max_K)
+    # 3. batas maksimum K yang akan di‑grid‑search
+    max_K = st.slider("Pencarian K maksimal:", 2, 5, 3)
 
-                if best_p and best_k:
-                    st.success(f"Struktur terbaik: p = {best_p}, K = {best_k}")
-                    st.session_state['selected_p'] = best_p
-                    st.session_state['selected_k'] = best_k
-                    st.session_state['model_type'] = model_choice
-                else:
-                    st.error("Gagal menentukan struktur terbaik.")
+    # 4. tombol eksekusi penuh
+    if st.button("🔍 Cari K Terbaik & Estimasi Model"):
+        with st.spinner("Menjalankan pemodelan ..."):
 
-        if 'selected_p' in st.session_state and 'selected_k' in st.session_state:
-            best_p = st.session_state['selected_p']
-            best_k = st.session_state['selected_k']
-            if st.button("📌 Latih Model dengan p & K Terbaik"):
-                with st.spinner("Melatih model final..."):
-                    if model_choice == "MAR-Normal":
-                        model = em_mar_normal(X, best_p, best_k)
-                        st.session_state['best_model'] = model
-                        st.session_state['best_p'] = best_p
-                        st.session_state['best_k'] = best_k
-                        st.session_state['model_type'] = "MAR-Normal"
-                        st.session_state['ar_params'] = model['ar_params']
-                        st.session_state['sigmas'] = model['sigmas']
-                        st.session_state['weights'] = model['weights']
-                    else:
-                        model = em_mar_ged(X, best_p, best_k)
-                        st.session_state['best_model_ged'] = model
-                        st.session_state['best_p_ged'] = best_p
-                        st.session_state['best_k_ged'] = best_k
-                        st.session_state['model_type'] = "MAR-GED"
-                        st.session_state['ar_params'] = model['ar_params']
-                        st.session_state['sigmas'] = model['sigmas']
-                        st.session_state['weights'] = model['weights']
-                    st.success(f"Model dilatih: p = {best_p}, K = {best_k}")
+            # =====================================================
+            # A) Pencarian K terbaik   ---------------------------
+            # =====================================================
+            if model_choice == "MAR-Normal":
+                best_model, df_k = find_best_K(series, p_input, 
+                                               range(1, max_K + 1))
+            else:
+                # fungsi find_best_K_ged Anda, konsep sama
+                best_model, df_k = find_best_K_ged(series, p_input, 
+                                                   range(1, max_K + 1))
 
-    elif metode_pemodelan == "Manual":
-        p_manual = st.number_input("Masukkan ordo AR (p):", min_value=1, max_value=5, value=1)
-        K_manual = st.number_input("Masukkan jumlah komponen (K):", min_value=1, max_value=5, value=2)
+            best_k = best_model["K"]
+            st.success(f"K terbaik: {best_k} (BIC = {best_model['BIC']:.2f})")
 
-        if st.button("🧠 Latih Model Secara Manual"):
-            with st.spinner("Melatih model dengan parameter manual..."):
-                if model_choice == "MAR-Normal":
-                    model = em_mar_normal(X, p_manual, K_manual)
-                    st.session_state['best_model'] = model
-                    st.session_state['best_p'] = p_manual
-                    st.session_state['best_k'] = K_manual
-                    st.session_state['model_type'] = "MAR-Normal"
-                    st.session_state['ar_params'] = model['ar_params']
-                    st.session_state['sigmas'] = model['sigmas']
-                    st.session_state['weights'] = model['weights']
-                else:
-                    model = em_mar_ged(X, p_manual, K_manual)
-                    st.session_state['best_model_ged'] = model
-                    st.session_state['best_p_ged'] = p_manual
-                    st.session_state['best_k_ged'] = K_manual
-                    st.session_state['model_type'] = "MAR-GED"
-                    st.session_state['ar_params'] = model['ar_params']
-                    st.session_state['sigmas'] = model['sigmas']
-                    st.session_state['weights'] = model['weights']
-                st.success(f"Model dilatih: p = {p_manual}, K = {K_manual}")
+            # Simpan hasil ke session_state
+            st.session_state.update({
+                'best_model' : best_model,
+                'best_p'     : p_input,
+                'best_k'     : best_k,
+                'model_type' : model_choice,
+                'ar_params'  : best_model['phi'],
+                'sigmas'     : best_model['sigma'],
+                'weights'    : best_model['pi']
+            })
+
+            # =====================================================
+            # B) Uji signifikansi parameter   --------------------
+            # =====================================================
+            #  (contoh cepat: t‑stat = phi / se; se = sqrt(σ² * (X'X)⁻¹) )
+            sig_df = parameter_significance(best_model)      # definisikan fungsi ini
+            st.subheader("📊 Uji Signifikansi Parameter")
+            st.dataframe(sig_df.style.format("{:.4f}"))
+
+            # =====================================================
+            # C) Diagnostik Residual -----------------------------
+            # =====================================================
+            resid = best_model['y'] - (best_model['X'] @ 
+                                       best_model['phi'][np.argmax(best_model['pi'])])
+            diag_residual(resid)     # fungsi: plot ACF resid, Ljung‑Box, JB, dsb.
+
+            # =====================================================
+            # D) Prediksi Out‑of‑Sample --------------------------
+            # =====================================================
+            n_forecast = st.number_input("Horizon Prediksi:", 1, 60, 30)
+            if st.button("🚀 Prediksi Out‑of‑Sample"):
+                pred_df = forecast_mar(best_model, series, n_forecast)
+                st.subheader("📈 Prediksi vs Aktual")
+                st.line_chart(pred_df.set_index("Tanggal"))
+
+                mape = np.mean(np.abs(pred_df['Error'] / pred_df['Aktual'])) * 100
+                st.write(f"MAPE: **{mape:.2f}%**")
+
+# ===================== FUNGSI PENDUKUNG =====================
+def parameter_significance(model):
+    """
+    Hitung t‑stat & p‑value sederhana (normal approximation) 
+    untuk setiap koefisien phi.
+    """
+    phi   = model['phi']
+    sigma = model['sigma']
+    X     = model['X']
+    T_eff = X.shape[0]
+    p     = phi.shape[1]
+
+    se_phi = []
+    for k in range(model['K']):
+        XtX_inv = np.linalg.inv(X.T @ X + 1e-6*np.eye(p))
+        se = np.sqrt(sigma[k]**2 * np.diag(XtX_inv))
+        se_phi.append(se)
+
+    rows = []
+    for k in range(model['K']):
+        for j in range(p):
+            t_stat = phi[k, j] / se_phi[k][j]
+            p_val  = 2 * (1 - norm.cdf(abs(t_stat)))
+            rows.append({"Komponen": k+1, "Phi_j": f"phi{j+1}", 
+                         "Estimate": phi[k, j], "t": t_stat, "p‑value": p_val})
+    return pd.DataFrame(rows)
+
+def diag_residual(resid):
+    """
+    Contoh singkat: tampilkan plot ACF & hasil uji Ljung‑Box
+    """
+    from statsmodels.graphics.tsaplots import plot_acf
+    from statsmodels.stats.diagnostic import acorr_ljungbox
+    import matplotlib.pyplot as plt
+
+    st.subheader("🧪 Diagnostik Residual")
+    # ACF plot
+    fig, ax = plt.subplots()
+    plot_acf(resid, lags=40, ax=ax)
+    st.pyplot(fig)
+
+    # Ljung‑Box
+    lb = acorr_ljungbox(resid, lags=[10, 20], return_df=True)
+    st.write("Ljung‑Box test:")
+    st.dataframe(lb.round(4))
+
+def forecast_mar(model, series, n_steps):
+    """
+    Prediksi n_steps ke depan untuk MAR‑Normal/GED sederhana.
+    Hasil: DataFrame [Tanggal, Prediksi, Aktual, Error]
+    """
+    #  (sesuaikan dengan fungsi forecast Anda)
+    ...
 
 # =================== PREDIKSI DAN VISUALISASI===========================
