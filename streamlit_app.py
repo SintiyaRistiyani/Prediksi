@@ -5,8 +5,6 @@ import matplotlib.pyplot as plt
 import altair as alt
 from scipy.stats import skew, kurtosis
 import seaborn as sns
-
-
 from sklearn.cluster import KMeans
 from scipy.stats import gennorm, norm, kstest
 from statsmodels.tools.tools import add_constant
@@ -14,6 +12,8 @@ from statsmodels.stats.diagnostic import acorr_ljungbox, het_white
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.stattools import adfuller
 from sklearn.metrics import mean_absolute_percentage_error
+from scipy.stats import skew, kurtosis, shapiro, jarque_bera
+
 
 # Utility
 from io import StringIO
@@ -37,7 +37,51 @@ def diagnostik_saham(series, nama_saham):
     if series is None or len(series) == 0:
         st.warning("Series log return kosong.")
         return
+# ===================== FUNGSI PENDUKUNG =====================
+def parameter_significance(model):
+    """
+    Hitung t‑stat & p‑value sederhana (normal approximation) 
+    untuk setiap koefisien phi.
+    """
+    phi   = model['phi']
+    sigma = model['sigma']
+    X     = model['X']
+    T_eff = X.shape[0]
+    p     = phi.shape[1]
 
+    se_phi = []
+    for k in range(model['K']):
+        XtX_inv = np.linalg.inv(X.T @ X + 1e-6*np.eye(p))
+        se = np.sqrt(sigma[k]**2 * np.diag(XtX_inv))
+        se_phi.append(se)
+
+    rows = []
+    for k in range(model['K']):
+        for j in range(p):
+            t_stat = phi[k, j] / se_phi[k][j]
+            p_val  = 2 * (1 - norm.cdf(abs(t_stat)))
+            rows.append({"Komponen": k+1, "Phi_j": f"phi{j+1}", 
+                         "Estimate": phi[k, j], "t": t_stat, "p‑value": p_val})
+    return pd.DataFrame(rows)
+
+def diag_residual(resid):
+
+    st.subheader("🧪 Diagnostik Residual")
+    # ACF plot
+    fig, ax = plt.subplots()
+    plot_acf(resid, lags=40, ax=ax)
+    st.pyplot(fig)
+
+    # Ljung‑Box
+    lb = acorr_ljungbox(resid, lags=[10, 20], return_df=True)
+    st.write("Ljung‑Box test:")
+    st.dataframe(lb.round(4))
+
+def forecast_mar(model, series, n_steps):
+    """
+    Prediksi n_steps ke depan untuk MAR‑Normal/GED sederhana.
+    Hasil: DataFrame [Tanggal, Prediksi, Aktual, Error]
+    """
     series = series.dropna()
 
     # Skewness & Kurtosis
@@ -168,12 +212,6 @@ elif menu == "Stasioneritas":
     diagnostik_saham(train['Log Return'], harga_col)
 
     # === Fungsi Uji ADF ===
-    from statsmodels.tsa.stattools import adfuller
-
-    def check_stationarity(series):
-        result = adfuller(series.dropna())
-        return result
-
     # Hitung ADF
     adf_result = check_stationarity(train['Log Return'])
     st.markdown("### 🔍 Hasil Uji ADF")
@@ -183,8 +221,6 @@ elif menu == "Stasioneritas":
              "✅ Stasioner (p < 0.05)" if adf_result[1] < 0.05 else "⚠️ Tidak Stasioner (p ≥ 0.05)")
 
     # === Plot ACF & PACF ===
-    from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
-    import matplotlib.pyplot as plt
 
     st.markdown("### 🔁 ACF dan PACF Plot")
     fig, ax = plt.subplots(1, 2, figsize=(12, 4))
@@ -193,12 +229,6 @@ elif menu == "Stasioneritas":
     ax[0].set_title("ACF")
     ax[1].set_title("PACF")
     st.pyplot(fig)
-
-    from scipy.stats import skew, kurtosis, shapiro, jarque_bera
-
-    def diagnostik_saham(series, nama_saham):
-        st.markdown(f"## 🧪 Uji Diagnostik Distribusi: {nama_saham}")
-        series = series.dropna()
         
         # Skewness & Kurtosis
         skw = skew(series)
@@ -292,59 +322,5 @@ elif menu == "Model":
 
                 mape = np.mean(np.abs(pred_df['Error'] / pred_df['Aktual'])) * 100
                 st.write(f"MAPE: **{mape:.2f}%**")
-
-# ===================== FUNGSI PENDUKUNG =====================
-def parameter_significance(model):
-    """
-    Hitung t‑stat & p‑value sederhana (normal approximation) 
-    untuk setiap koefisien phi.
-    """
-    phi   = model['phi']
-    sigma = model['sigma']
-    X     = model['X']
-    T_eff = X.shape[0]
-    p     = phi.shape[1]
-
-    se_phi = []
-    for k in range(model['K']):
-        XtX_inv = np.linalg.inv(X.T @ X + 1e-6*np.eye(p))
-        se = np.sqrt(sigma[k]**2 * np.diag(XtX_inv))
-        se_phi.append(se)
-
-    rows = []
-    for k in range(model['K']):
-        for j in range(p):
-            t_stat = phi[k, j] / se_phi[k][j]
-            p_val  = 2 * (1 - norm.cdf(abs(t_stat)))
-            rows.append({"Komponen": k+1, "Phi_j": f"phi{j+1}", 
-                         "Estimate": phi[k, j], "t": t_stat, "p‑value": p_val})
-    return pd.DataFrame(rows)
-
-def diag_residual(resid):
-    """
-    Contoh singkat: tampilkan plot ACF & hasil uji Ljung‑Box
-    """
-    from statsmodels.graphics.tsaplots import plot_acf
-    from statsmodels.stats.diagnostic import acorr_ljungbox
-    import matplotlib.pyplot as plt
-
-    st.subheader("🧪 Diagnostik Residual")
-    # ACF plot
-    fig, ax = plt.subplots()
-    plot_acf(resid, lags=40, ax=ax)
-    st.pyplot(fig)
-
-    # Ljung‑Box
-    lb = acorr_ljungbox(resid, lags=[10, 20], return_df=True)
-    st.write("Ljung‑Box test:")
-    st.dataframe(lb.round(4))
-
-def forecast_mar(model, series, n_steps):
-    """
-    Prediksi n_steps ke depan untuk MAR‑Normal/GED sederhana.
-    Hasil: DataFrame [Tanggal, Prediksi, Aktual, Error]
-    """
-    #  (sesuaikan dengan fungsi forecast Anda)
-    ...
 
 # =================== PREDIKSI DAN VISUALISASI===========================
