@@ -10,7 +10,6 @@ from statsmodels.stats.diagnostic import acorr_ljungbox, het_white
 from statsmodels.graphics.tsaplots import plot_acf
 from statsmodels.tsa.stattools import adfuller
 
-# Utility
 from io import StringIO
 
 # ----------------- Fungsi bantu -----------------
@@ -23,7 +22,6 @@ def load_data(uploaded_file):
         return None
 
 def check_stationarity(df, column):
-    from statsmodels.tsa.stattools import adfuller
     result = adfuller(df[column].dropna())
     return result
 
@@ -46,7 +44,7 @@ if menu == "Home":
     st.markdown("""
         Selamat datang di aplikasi prediksi harga saham berbasis **Streamlit**.  
         Silakan gunakan menu di samping untuk mengakses berbagai fitur mulai dari input data hingga interpretasi hasil model.
-        
+
         Ketentuan :
         1. file harus dalam bentuk csv
         2. data harus memiliki kolom date/tanggal dan harga saham
@@ -662,8 +660,14 @@ if menu == "Prediksi dan Visualisasi":
         st.error("Kolom harga tidak ditemukan dalam data asli.")
         st.stop()
 
-    harga_terakhir = df.iloc[-1][selected_price_col]
+    if model_type == "MAR-Normal" and 'best_model' not in st.session_state:
+        st.error("Model MAR-Normal belum dilatih.")
+        st.stop()
+    if model_type == "MAR-GED" and 'best_model_ged' not in st.session_state:
+        st.error("Model MAR-GED belum dilatih.")
+        st.stop()
 
+    harga_terakhir = df.iloc[-1][selected_price_col]
     n_steps = st.slider("🔢 Jumlah Hari Prediksi:", 5, 60, 30)
 
     if st.button("🔮 Prediksi"):
@@ -675,11 +679,10 @@ if menu == "Prediksi dan Visualisasi":
                 model = st.session_state['best_model_ged']
                 pred_log_return = predict_mar_ged(model, log_return.values, n_steps=n_steps)
 
-            # Hitung harga dari log return
             harga_prediksi = [harga_terakhir]
             for r in pred_log_return:
                 harga_prediksi.append(harga_prediksi[-1] * np.exp(r))
-            harga_prediksi = harga_prediksi[1:]  # buang harga awal
+            harga_prediksi = harga_prediksi[1:]
 
             tanggal_awal = df['Tanggal'].iloc[-1] if 'Tanggal' in df.columns else df.iloc[-1][0]
             tanggal_prediksi = pd.date_range(start=tanggal_awal + pd.Timedelta(days=1), periods=n_steps, freq='B')
@@ -690,23 +693,27 @@ if menu == "Prediksi dan Visualisasi":
                 'Prediksi Harga': harga_prediksi
             })
 
-            # ⬅️ Tambahkan penyimpanan hasil ke session_state
             st.session_state['hasil_prediksi'] = df_prediksi
             st.session_state['n_steps_prediksi'] = n_steps
             st.session_state['pred_log_return'] = pred_log_return
             st.session_state['pred_harga'] = harga_prediksi
 
-            # Visualisasi & tabel
+            st.markdown("### 📊 Hasil Prediksi Log Return dan Harga Saham:")
             st.line_chart(df_prediksi.set_index('Tanggal')['Prediksi Harga'])
+
             st.dataframe(df_prediksi.style.format({
                 'Log Return': '{:.6f}',
                 'Prediksi Harga': 'Rp{:,.2f}'
             }))
 
-            # Tombol Unduh
+            st.markdown("#### 🔢 Tabel Prediksi Log Return (30 Hari ke Depan)")
+            st.dataframe(pd.DataFrame({
+                'Hari ke-': [f'Hari {i+1}' for i in range(len(pred_log_return))],
+                'Log Return': pred_log_return
+            }).style.format({'Log Return': '{:.6f}'}))
+
             csv = df_prediksi.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Unduh Hasil Prediksi", data=csv, file_name='prediksi_harga.csv', mime='text/csv')
-            
 
 # ----------------- Halaman Interpretasi dan Saran -----------------
 if menu == "Interpretasi dan Saran":
@@ -722,14 +729,22 @@ if menu == "Interpretasi dan Saran":
 
     if model_type == "MAR-Normal":
         model = st.session_state['best_model']
-        ar_params = model['ar_params']
+    else:
+        model = st.session_state['best_model_ged']
+
+    ar_params = model['ar_params']
+    weights = model['weights']
+    main_k = np.argmax(weights)
+
+    st.markdown(f"Komponen dominan: Komponen ke-{main_k+1} dengan bobot {weights[main_k]:.4f}")
+
+    if model_type == "MAR-Normal":
         signif_ar = np.any(np.abs(ar_params) > 0.1)
         if signif_ar:
             st.write("Model menunjukkan adanya efek autoregresif yang cukup kuat pada beberapa komponen.")
         else:
             st.write("Mayoritas parameter AR tidak signifikan. Pergerakan harga bersifat acak atau didominasi noise.")
     else:
-        model = st.session_state['best_model_ged']
         st.write("Model menggunakan distribusi Generalized Error (GED) yang cocok untuk data dengan kurtosis tinggi atau heavy-tail.")
 
     st.subheader("📈 Prediksi dan Risiko")
@@ -742,3 +757,4 @@ if menu == "Interpretasi dan Saran":
     - Lakukan validasi out-of-sample untuk mengukur akurasi jangka panjang.
     - Kombinasikan dengan analisis teknikal/fundamental untuk hasil yang lebih komprehensif.
     """)
+
