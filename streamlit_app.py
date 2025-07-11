@@ -757,4 +757,3 @@ if menu == "Interpretasi dan Saran":
     - Lakukan validasi out-of-sample untuk mengukur akurasi jangka panjang.
     - Kombinasikan dengan analisis teknikal/fundamental untuk hasil yang lebih komprehensif.
     """)
-
