@@ -433,10 +433,6 @@ elif menu == "Stasioneritas":
         st.error("❌ Log return **tidak stasioner** (p-value ≥ 0.05 → gagal tolak H0: ada akar unit).")
 
 # ----------------- Halaman Model -----------------
-from sklearn.cluster import KMeans
-from scipy.stats import gennorm
-import matplotlib.pyplot as plt
-
 # ================= Model ===================
 if menu == "Model":
     st.title("🏗️ Training Model MAR")
