@@ -690,18 +690,18 @@ elif menu == "Prediksi dan Visualisasi":
             st.error(f"❌ Data '{key}' belum tersedia. Silakan lakukan input, preprocessing, dan estimasi model terlebih dahulu.")
             st.stop()
 
-            log_return_train = st.session_state['log_return_train']
-            df = st.session_state['df']
-            best_model = st.session_state['best_model']
-            harga_col = st.session_state['harga_col']
+    log_return_train = st.session_state['log_return_train']
+    df = st.session_state['df']
+    best_model = st.session_state['best_model']
+    harga_col = st.session_state['harga_col']
 
-            st.markdown(f"📌 **Saham yang Dipilih:** {harga_col}")
+    st.markdown(f"📌 **Saham yang Dipilih:** {harga_col}")
 
-            # Karena log_return_train hanya ada 'Date' dan 'Log Return', gunakan kolom 'Log Return' saja
-            matched_col = 'Log Return'
+    # Karena log_return_train hanya ada 'Date' dan 'Log Return', gunakan kolom 'Log Return' saja
+    matched_col = 'Log Return'
 
-            n_steps = st.number_input("📅 Masukkan Jumlah Hari Prediksi:", min_value=1, max_value=90, value=30)
-            show_as = st.radio("📊 Tampilkan Hasil Sebagai:", ['Log-Return', 'Harga'])
+    n_steps = st.number_input("📅 Masukkan Jumlah Hari Prediksi:", min_value=1, max_value=90, value=30)
+    show_as = st.radio("📊 Tampilkan Hasil Sebagai:", ['Log-Return', 'Harga'])
 
     # Fungsi prediksi MAR-Normal (komponen dominan)
     def predict_mar_normal(model, X_init, n_steps=30):
@@ -752,18 +752,14 @@ elif menu == "Prediksi dan Visualisasi":
 
         return np.array(preds)
 
-    n_steps = st.number_input("📅 Masukkan Jumlah Hari Prediksi:", min_value=1, max_value=90, value=30)
-    show_as = st.radio("📊 Tampilkan Hasil Sebagai:", ['Log-Return', 'Harga'])
-
     if st.button("▶️ Prediksi"):
-        # Ambil data log-return untuk saham yang dipilih
         X_init = log_return_train[matched_col].dropna().values
 
-        # Ambil model terbaik untuk saham tersebut
-        if matched_col in best_model:
-            model = best_model[matched_col]
+        # Ambil model dari best_model dengan key sesuai harga_col (nama saham asli)
+        if harga_col in best_model:
+            model = best_model[harga_col]
         else:
-            st.error(f"❌ Model untuk saham '{matched_col}' tidak ditemukan.")
+            st.error(f"❌ Model untuk saham '{harga_col}' tidak ditemukan.")
             st.stop()
 
         dist = model.get('dist', 'normal').lower()
@@ -776,13 +772,12 @@ elif menu == "Prediksi dan Visualisasi":
             st.error(f"❌ Distribusi model '{dist}' tidak dikenali atau fungsi prediksi belum tersedia.")
             st.stop()
 
-        st.success(f"✅ Prediksi {n_steps} hari ke depan untuk {matched_col} selesai.")
+        st.success(f"✅ Prediksi {n_steps} hari ke depan untuk {harga_col} selesai.")
 
         if show_as == 'Harga':
             if harga_col in df.columns:
                 last_price = df.loc[df.index[-1], harga_col]
             else:
-                # fallback: pakai kolom kedua harga jika harga_col tidak ditemukan
                 all_harga_cols = [col for col in df.columns if col != 'Date']
                 if len(all_harga_cols) > 0:
                     last_price = df.loc[df.index[-1], all_harga_cols[0]]
@@ -803,7 +798,7 @@ elif menu == "Prediksi dan Visualisasi":
                 'Hari ke': np.arange(1, n_steps + 1),
                 'Harga Prediksi': preds_price
             })
-            st.write(f"### 📋 Tabel Prediksi Harga Saham {matched_col}")
+            st.write(f"### 📋 Tabel Prediksi Harga Saham {harga_col}")
             st.dataframe(df_pred.style.format({"Harga Prediksi": "Rp {:,.2f}".format}))
 
             fig, ax = plt.subplots(figsize=(12, 5))
@@ -811,7 +806,7 @@ elif menu == "Prediksi dan Visualisasi":
             ax.plot(harga_hist.index, harga_hist.values, label='Harga Historis', color='blue')
             future_idx = np.arange(harga_hist.index[-1] + 1, harga_hist.index[-1] + n_steps + 1)
             ax.plot(future_idx, preds_price, label='Harga Prediksi', linestyle='--', color='orange')
-            ax.set_title(f"📈 Prediksi Harga Saham {matched_col}")
+            ax.set_title(f"📈 Prediksi Harga Saham {harga_col}")
             ax.set_xlabel("Hari")
             ax.set_ylabel("Harga (Rupiah)")
             ax.legend()
@@ -822,17 +817,15 @@ elif menu == "Prediksi dan Visualisasi":
                 'Hari ke': np.arange(1, n_steps + 1),
                 'Log-Return Prediksi': preds_log
             })
-            st.write(f"### 📋 Tabel Prediksi Log-Return Saham {matched_col}")
+            st.write(f"### 📋 Tabel Prediksi Log-Return Saham {harga_col}")
             st.dataframe(df_pred.style.format({"Log-Return Prediksi": "{:.6f}"}))
 
             fig, ax = plt.subplots(figsize=(12, 5))
             ax.plot(np.arange(len(X_init)), X_init, label='Log-Return Historis', color='green')
             future_idx = np.arange(len(X_init), len(X_init) + n_steps)
             ax.plot(future_idx, preds_log, label='Log-Return Prediksi', linestyle='--', color='red')
-            ax.set_title(f"📈 Prediksi Log-Return Saham {matched_col}")
+            ax.set_title(f"📈 Prediksi Log-Return Saham {harga_col}")
             ax.set_xlabel("Hari")
             ax.set_ylabel("Log-Return")
             ax.legend()
             st.pyplot(fig)
-
-
