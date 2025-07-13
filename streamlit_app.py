@@ -355,6 +355,67 @@ def test_significance_ar_params_mar(X, y, phi, sigma, tau):
                 })
 
     return pd.DataFrame(result)
+    
+# Residual
+from scipy.stats import kstest, norm, gennorm
+from statsmodels.stats.diagnostic import acorr_ljungbox
+import numpy as np
+import pandas as pd
+
+def compute_residuals_mar(model):
+    """
+    Hitung residual berdasarkan komponen dominan (argmax dari tau)
+    """
+    tau = model['tau']
+    X = model['X']
+    y = model['y']
+    phi = model['phi']
+
+    dominant = np.argmax(tau, axis=1)
+    residuals = np.zeros(len(y))
+    for t in range(len(y)):
+        k = dominant[t]
+        y_pred = X[t] @ phi[k]
+        residuals[t] = y[t] - y_pred
+
+    return residuals
+
+def test_residual_assumptions_mar(model, lags=10, ged=False):
+    """
+    Uji asumsi residual MAR (Normal atau GED):
+    - K-S test (Normal jika ged=False, GED jika ged=True)
+    - Ljung-Box test (autokorelasi)
+    """
+    residuals = compute_residuals_mar(model)
+    residuals_std = (residuals - np.mean(residuals)) / np.std(residuals)
+
+    if ged:
+        # Jika MAR-GED, gunakan rata-rata beta untuk CDF GED
+        beta_avg = np.mean(model['beta'])
+        ks_stat, ks_pval = kstest(residuals_std, lambda x: gennorm.cdf(x, beta_avg))
+        hipotesis = 'Residual mengikuti distribusi GED'
+        keputusan = 'Tolak H0 (Tidak GED)' if ks_pval < 0.05 else 'Gagal Tolak H0 (GED)'
+    else:
+        ks_stat, ks_pval = kstest(residuals_std, 'norm')
+        hipotesis = 'Residual mengikuti distribusi normal'
+        keputusan = 'Tolak H0 (Tidak Normal)' if ks_pval < 0.05 else 'Gagal Tolak H0 (Normal)'
+
+    # Ljung-Box Test
+    lb_result = acorr_ljungbox(residuals, lags=lags, return_df=True)
+    lb_stat = lb_result['lb_stat'].values[-1]
+    lb_pval = lb_result['lb_pvalue'].values[-1]
+    keputusan_lb = 'Tolak H0 (Ada Autokorelasi)' if lb_pval < 0.05 else 'Gagal Tolak H0 (Tidak Ada Autokorelasi)'
+
+    result = pd.DataFrame({
+        'Test': ['Kolmogorov-Smirnov', 'Ljung-Box'],
+        'Statistic': [ks_stat, lb_stat],
+        'p-value': [ks_pval, lb_pval],
+        'Hipotesis Nol (H0)': [hipotesis, 'Tidak ada autokorelasi residual'],
+        'Keputusan': [keputusan, keputusan_lb]
+    })
+
+    return result, residuals
+
 
 # FORECAST
 def forecast_mar(model, series, n_steps):
