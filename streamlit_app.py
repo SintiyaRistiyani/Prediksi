@@ -683,6 +683,46 @@ elif menu == "Uji Signifikansi dan Residual":
 elif menu == "Prediksi dan Visualisasi":
     st.header("🔮 Prediksi Harga Saham dengan Model MAR")
 
+    # Fungsi prediksi MAR Normal (komponen dominan)
+    def predict_mar_normal(model, X_init, n_steps=30):
+        phi = model['phi']
+        pi = model['pi']
+        p = phi.shape[1]
+        main_k = np.argmax(pi)
+        phi_main = phi[main_k]
+        preds = []
+        X_curr = list(X_init[-p:])
+        for _ in range(n_steps):
+            x_lag = np.array(X_curr[-p:])[::-1]
+            next_val = np.dot(phi_main, x_lag)
+            preds.append(next_val)
+            X_curr.append(next_val)
+        return np.array(preds)
+
+    # Fungsi prediksi MAR GED (komponen dominan)
+    def predict_mar_ged(model, X_init, n_steps=30, seed=42):
+        from scipy.stats import gennorm
+        phi = model['phi']
+        pi = model['pi']
+        sigma = model['sigma']
+        beta = model['beta']
+        p = phi.shape[1]
+        main_comp = np.argmax(pi)
+        phi_main = phi[main_comp]
+        sigma_main = sigma[main_comp]
+        beta_main = beta[main_comp]
+        np.random.seed(seed)
+        preds = []
+        X_curr = list(X_init[-p:])
+        for _ in range(n_steps):
+            next_val = np.dot(phi_main, X_curr[-p:][::-1])
+            noise = gennorm.rvs(beta_main, loc=0, scale=sigma_main)
+            next_val += noise
+            preds.append(next_val)
+            X_curr.append(next_val)
+        return np.array(preds)
+
+    # Validasi dan ambil data
     required_keys = ['log_return_train', 'df', 'best_model', 'harga_col']
     for key in required_keys:
         if key not in st.session_state:
@@ -696,14 +736,14 @@ elif menu == "Prediksi dan Visualisasi":
 
     st.markdown(f"📌 **Saham yang Dipilih:** {harga_col}")
 
-    matched_col = 'Log Return'  # karena model hanya buat 1 kolom log-return ini
+    matched_col = 'Log Return'
 
     n_steps = st.number_input("📅 Masukkan Jumlah Hari Prediksi:", min_value=1, max_value=90, value=30)
     show_as = st.radio("📊 Tampilkan Hasil Sebagai:", ['Log-Return', 'Harga'])
 
     if st.button("▶️ Prediksi"):
         X_init = log_return_train[matched_col].dropna().values
-        model = best_model  # langsung pakai model yang ada, tanpa keyed by saham
+        model = best_model
 
         dist = model.get('dist', 'normal').lower()
 
