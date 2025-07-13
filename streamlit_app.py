@@ -952,9 +952,9 @@ def compute_price_metrics(actual, pred):
     return mape, rmse, mae
 
 # ---------------------------
-# Halaman Streamlit
-# ---------------------------
-st.header("🔮 Prediksi Harga & Visualisasi MAR-Normal")
+# Halaman Prediksi
+elif menu == "Prediksi dan Visualisasi":
+st.header("🔮 Prediksi Harga & Visualisasi")
 
 nama_saham = st.selectbox("Pilih Saham", list(log_return_train.columns))
 
