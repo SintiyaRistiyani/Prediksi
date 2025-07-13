@@ -41,6 +41,58 @@ def diagnostik_saham(series, nama_saham):
     if series is None or len(series) == 0:
         st.warning("Series log return kosong.")
         return
+
+
+# Test Uji Signifikansi
+from scipy.stats import norm
+import pandas as pd
+import numpy as np
+
+def test_significance_ar_params_mar(X, y, phi, sigma, tau):
+    """
+    Uji signifikansi parameter AR untuk model MAR (Normal atau GED).
+    Digunakan untuk evaluasi parameter phi.
+
+    Parameters:
+    - X: matriks lag (T x p)
+    - y: vektor observasi (T,)
+    - phi: matriks parameter AR (K x p)
+    - sigma: vektor sigma tiap komponen (K,)
+    - tau: probabilitas posterior (T x K)
+
+    Output:
+    - DataFrame berisi estimasi, standard error, z-value, p-value, dan keputusan.
+    """
+    K, p = phi.shape
+    T = len(y)
+    result = []
+
+    for k in range(K):
+        idx_k = tau[:, k] > 1e-3  # Hanya komponen aktif (probabilitas cukup besar)
+
+        for j in range(p):
+            Xj = X[:, j]
+            nom = phi[k, j]
+            denom = np.sum(tau[:, k] * Xj**2)
+
+            if denom > 0:
+                se = np.sqrt(sigma[k]**2 / denom)
+                z = nom / se
+                p_value = 2 * (1 - norm.cdf(np.abs(z)))
+
+                result.append({
+                    'Komponen': k+1,
+                    'AR Index': f'phi_{j+1}',
+                    'Estimate': nom,
+                    'Std Error': se,
+                    'z-value': z,
+                    'p-value': p_value,
+                    'Signifikan': '✅' if p_value < 0.05 else '❌'
+                })
+
+    return pd.DataFrame(result)
+
+
 # ===================== FUNGSI PENDUKUNG MAR NORMAL=====================
 def parameter_significance(model):
     """
