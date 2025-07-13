@@ -933,7 +933,7 @@ elif menu == "Uji Signifikansi dan Residual":
         ax.set_title("Distribusi Residual MAR-GED")
         st.pyplot(fig)
 
-===================================== PREDIKSI DAN VISUALISASI===============================================
+# ===================================== PREDIKSI DAN VISUALISASI===============================================
 # Fungsi Konversi Log-Return ke Harga
 # ---------------------------
 def convert_logreturn_to_price(last_price, log_returns):
