@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import altair as alt
 import seaborn as sns
 from sklearn.cluster import KMeans
 from scipy.stats import gennorm, norm, kstest
@@ -10,19 +9,14 @@ from statsmodels.tools.tools import add_constant
 from statsmodels.stats.diagnostic import acorr_ljungbox, het_white
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.stattools import adfuller
-from sklearn.metrics import mean_absolute_percentage_error
-from scipy.stats import skew, kurtosis, shapiro, jarque_bera
-from scipy.stats import norm
-from numpy.linalg import LinAlgError
-from scipy.stats import gennorm
-from scipy.optimize import minimize
 from sklearn.metrics import mean_absolute_percentage_error, mean_squared_error, mean_absolute_error
-
+from numpy.linalg import LinAlgError
+from scipy.optimize import minimize
 
 # Utility
 from io import StringIO
 
-# ----------------- Fungsi bantu -----------------
+# ================== FUNGSI BANTU ==================
 def load_data(uploaded_file):
     try:
         df = pd.read_csv(uploaded_file)
@@ -37,107 +31,12 @@ def check_stationarity(series):
 
 def diagnostik_saham(series, nama_saham):
     st.markdown(f"## 🧪 Uji Diagnostik Distribusi: {nama_saham}")
-
     if series is None or len(series) == 0:
         st.warning("Series log return kosong.")
         return
 
-
-# Test Uji Signifikansi
-from scipy.stats import norm
-import pandas as pd
-import numpy as np
-
-def test_significance_ar_params_mar(X, y, phi, sigma, tau):
-    """
-    Uji signifikansi parameter AR untuk model MAR (Normal atau GED).
-    Digunakan untuk evaluasi parameter phi.
-
-    Parameters:
-    - X: matriks lag (T x p)
-    - y: vektor observasi (T,)
-    - phi: matriks parameter AR (K x p)
-    - sigma: vektor sigma tiap komponen (K,)
-    - tau: probabilitas posterior (T x K)
-
-    Output:
-    - DataFrame berisi estimasi, standard error, z-value, p-value, dan keputusan.
-    """
-    K, p = phi.shape
-    T = len(y)
-    result = []
-
-    for k in range(K):
-        idx_k = tau[:, k] > 1e-3  # Hanya komponen aktif (probabilitas cukup besar)
-
-        for j in range(p):
-            Xj = X[:, j]
-            nom = phi[k, j]
-            denom = np.sum(tau[:, k] * Xj**2)
-
-            if denom > 0:
-                se = np.sqrt(sigma[k]**2 / denom)
-                z = nom / se
-                p_value = 2 * (1 - norm.cdf(np.abs(z)))
-
-                result.append({
-                    'Komponen': k+1,
-                    'AR Index': f'phi_{j+1}',
-                    'Estimate': nom,
-                    'Std Error': se,
-                    'z-value': z,
-                    'p-value': p_value,
-                    'Signifikan': '✅' if p_value < 0.05 else '❌'
-                })
-
-    return pd.DataFrame(result)
-
-
-# ===================== FUNGSI PENDUKUNG MAR NORMAL=====================
-def parameter_significance(model):
-    """
-    Hitung t‑stat & p‑value sederhana (normal approximation) 
-    untuk setiap koefisien phi.
-    """
-    phi   = model['phi']
-    sigma = model['sigma']
-    X     = model['X']
-    T_eff = X.shape[0]
-    p     = phi.shape[1]
-
-    se_phi = []
-    for k in range(model['K']):
-        XtX_inv = np.linalg.inv(X.T @ X + 1e-6*np.eye(p))
-        se = np.sqrt(sigma[k]**2 * np.diag(XtX_inv))
-        se_phi.append(se)
-
-    rows = []
-    for k in range(model['K']):
-        for j in range(p):
-            t_stat = phi[k, j] / se_phi[k][j]
-            p_val  = 2 * (1 - norm.cdf(abs(t_stat)))
-            rows.append({"Komponen": k+1, "Phi_j": f"phi{j+1}", 
-                         "Estimate": phi[k, j], "t": t_stat, "p‑value": p_val})
-    return pd.DataFrame(rows)
-
-def diag_residual(resid):
-
-    st.subheader("🧪 Diagnostik Residual")
-    # ACF plot
-    fig, ax = plt.subplots()
-    plot_acf(resid, lags=40, ax=ax)
-    st.pyplot(fig)
-
-    # Ljung‑Box
-    lb = acorr_ljungbox(resid, lags=[10, 20], return_df=True)
-    st.write("Ljung‑Box test:")
-    st.dataframe(lb.round(4))
-
-# Untuk MAR-Normal
+# ================== FUNGSI EM MAR-NORMAL ==================
 def em_mar_normal_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
-    """
-    EM Algorithm untuk MAR-Normal
-    """
     np.random.seed(seed)
     n = len(series)
     y = series[p:]
@@ -150,7 +49,6 @@ def em_mar_normal_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
     ll_old = -np.inf
 
     for iteration in range(max_iter):
-        # E-Step
         log_tau = np.zeros((T_eff, K))
         for k in range(K):
             mu_k = X @ phi[k]
@@ -161,177 +59,40 @@ def em_mar_normal_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
         tau = np.exp(log_tau - log_tau_max)
         tau /= tau.sum(axis=1, keepdims=True)
 
-        # M-Step
         for k in range(K):
             w = tau[:, k]
             W = np.diag(w)
-            XtWX = X.T @ W @ X
+            XtWX = X.T @ W @ X + 1e-6 * np.eye(p)
             XtWy = X.T @ (w * y)
             try:
-                XtWX += 1e-6 * np.eye(p)
                 phi[k] = np.linalg.solve(XtWX, XtWy)
             except LinAlgError:
                 phi[k] = np.linalg.lstsq(XtWX, XtWy, rcond=None)[0]
-
             mu_k = X @ phi[k]
             resid = y - mu_k
-            sigma[k] = max(np.sqrt(np.sum(w * resid**2) / np.sum(w)), 1e-6)
+            sigma[k] = max(np.sqrt(np.sum(w * resid ** 2) / np.sum(w)), 1e-6)
 
         pi = tau.mean(axis=0)
-        pi = np.maximum(pi, 1e-8)
-        pi /= pi.sum()
-
         ll_new = np.sum(np.log(np.sum(np.exp(log_tau - log_tau_max), axis=1)) + log_tau_max.flatten())
 
         if np.abs(ll_new - ll_old) < tol:
             break
         ll_old = ll_new
 
-    # Hitung jumlah parameter untuk AIC/BIC
-    num_params = K * (p + 1) + (K - 1)  # phi, sigma, pi
+    num_params = K * (p + 1) + (K - 1)
     aic = -2 * ll_new + 2 * num_params
     bic = -2 * ll_new + np.log(T_eff) * num_params
 
     return {
-        'K': K,
-        'phi': phi,
-        'sigma': sigma,
-        'pi': pi,
-        'loglik': ll_new,
-        'AIC': aic,
-        'BIC': bic,
-        'tau': tau,
-        'X': X,
-        'y': y
+        'K': K, 'phi': phi, 'sigma': sigma, 'pi': pi,
+        'loglik': ll_new, 'AIC': aic, 'BIC': bic,
+        'tau': tau, 'X': X, 'y': y, 'dist': 'normal'
     }
 
-# MAR-NORMAL
-
-def test_significance_mar(result):
-    """
-    Uji signifikansi parameter MAR-Normal (phi, sigma, pi)
-    """
-    phi = result['phi']         # (K x p)
-    sigma = result['sigma']     # (K,)
-    pi = result['pi']           # (K,)
-    tau = result['tau']         # (T x K)
-    X = result['X']             # (T x p)
-    y = result['y']             # (T,)
-
-    K, p = phi.shape
-    T_eff = len(y)
-
-    sig_results = []
-
-    for k in range(K):
-        r_k = tau[:, k]
-        W = np.diag(r_k)
-
-        # --- Covariance phi ---
-        try:
-            XtWX = X.T @ W @ X
-            XtWX += 1e-6 * np.eye(p)  # regularisasi numerik agar stabil
-            cov_phi = sigma[k]**2 * np.linalg.inv(XtWX)
-            se_phi = np.sqrt(np.diag(cov_phi))
-        except np.linalg.LinAlgError:
-            se_phi = np.full(p, np.nan)
-
-        # --- Z-test untuk phi ---
-        z_phi = phi[k] / se_phi
-        pval_phi = 2 * (1 - norm.cdf(np.abs(z_phi)))
-
-        # --- Standard error sigma ---
-        se_sigma = sigma[k] / np.sqrt(2 * np.sum(r_k))
-        z_sigma = sigma[k] / se_sigma
-        pval_sigma = 2 * (1 - norm.cdf(np.abs(z_sigma)))
-    
-
-        # --- Standard error pi ---
-        se_pi = np.sqrt(pi[k] * (1 - pi[k]) / T_eff)
-        z_pi = pi[k] / se_pi
-        pval_pi = 2 * (1 - norm.cdf(np.abs(z_pi)))
-
-        # --- Simpan hasil untuk phi ---
-        for j in range(p):
-            sig_results.append({
-                'Komponen': k + 1,
-                'Parameter': f'phi_{j+1}',
-                'Estimate': phi[k, j],
-                'Std.Err': se_phi[j],
-                'z-value': z_phi[j],
-                'p-value': pval_phi[j],
-                'Signifikan': '✅' if pval_phi[j] < 0.05 else '❌'
-            })
-
-        # --- Simpan hasil untuk sigma ---
-        sig_results.append({
-            'Komponen': k + 1,
-            'Parameter': 'sigma',
-            'Estimate': sigma[k],
-            'Std.Err': se_sigma,
-            'z-value': z_sigma,
-            'p-value': pval_sigma,
-            'Signifikan': '✅' if pval_sigma < 0.05 else '❌'
-        })
-
-        # --- Simpan hasil untuk pi ---
-        sig_results.append({
-            'Komponen': k + 1,
-            'Parameter': 'pi',
-            'Estimate': pi[k],
-            'Std.Err': se_pi,
-            'z-value': z_pi,
-            'p-value': pval_pi,
-            'Signifikan': '✅' if pval_pi < 0.05 else '❌'
-        })
-
-    return pd.DataFrame(sig_results)
-
-
-# MAR-Normal
-def find_best_K(series, p, K_range, max_iter=100, tol=1e-6):
-    """
-    Cari jumlah komponen K terbaik untuk MAR-Normal berdasarkan BIC
-    """
-    results = []
-    for K in K_range:
-        print(f"🔄 Estimasi MAR-Normal untuk K={K}...")
-        model = em_mar_normal_manual(series, p, K, max_iter, tol)
-        results.append(model)
-
-    best_model = min(results, key=lambda x: x['BIC'])
-    print(f"✅ Model terbaik: K={best_model['K']} (BIC={best_model['BIC']:.2f})")
-
-    df_bic = pd.DataFrame({
-        'K': [m['K'] for m in results],
-        'LogLik': [m['loglik'] for m in results],
-        'AIC': [m['AIC'] for m in results],
-        'BIC': [m['BIC'] for m in results]
-    })
-
-    return best_model, df_bic
-
-
-def find_best_K(series, p, K_range, max_iter=100, tol=1e-6):
-    results = []
-    for K in K_range:
-        model = em_mar_normal_manual(series, p, K, max_iter, tol)
-        results.append(model)
-    best_model = min(results, key=lambda x: x['BIC'])
-    df_bic = pd.DataFrame({
-        'K': [m['K'] for m in results],
-        'LogLik': [m['loglik'] for m in results],
-        'AIC': [m['AIC'] for m in results],
-        'BIC': [m['BIC'] for m in results]
-    })
-    return best_model, df_bic
-
-
-# ==================== FUNGSI PENDUKUNG MAR GED ==================================
+# ================== FUNGSI EM MAR-GED ==================
 def estimate_beta(residuals, weights, sigma_init=1.0):
     def neg_log_likelihood(beta):
-        if beta <= 0:
-            return np.inf
+        if beta <= 0: return np.inf
         pdf_vals = gennorm.pdf(residuals, beta, loc=0, scale=sigma_init)
         logpdf = np.log(pdf_vals + 1e-12)
         return -np.sum(weights * logpdf)
@@ -339,7 +100,6 @@ def estimate_beta(residuals, weights, sigma_init=1.0):
     result = minimize(neg_log_likelihood, x0=np.array([2.0]), bounds=[(0.1, 10)])
     return result.x[0] if result.success else 2.0
 
-# === EM ALGORITHM UNTUK MAR-GED ===
 def em_mar_ged_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
     np.random.seed(seed)
     n = len(series)
@@ -367,188 +127,83 @@ def em_mar_ged_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
         for k in range(K):
             w = tau[:, k]
             W = np.diag(w)
-            XtWX = X.T @ W @ X
+            XtWX = X.T @ W @ X + 1e-6 * np.eye(p)
             XtWy = X.T @ (w * y)
             try:
-                XtWX += 1e-6 * np.eye(p)
                 phi[k] = np.linalg.solve(XtWX, XtWy)
             except LinAlgError:
                 phi[k] = np.linalg.lstsq(XtWX, XtWy, rcond=None)[0]
-
             mu_k = X @ phi[k]
             resid = y - mu_k
-            sigma[k] = max(np.sqrt(np.sum(w * resid**2) / np.sum(w)), 1e-6)
+            sigma[k] = max(np.sqrt(np.sum(w * resid ** 2) / np.sum(w)), 1e-6)
             beta[k] = estimate_beta(resid, w, sigma_init=sigma[k])
 
         pi = tau.mean(axis=0)
-        pi = np.maximum(pi, 1e-8)
-        pi /= pi.sum()
-
         ll_new = np.sum(np.log(np.sum(np.exp(log_tau - log_tau_max), axis=1)) + log_tau_max.flatten())
         if np.abs(ll_new - ll_old) < tol:
             break
         ll_old = ll_new
 
-    num_params = K * (p + 2) + (K - 1)  # phi, sigma, beta, pi
+    num_params = K * (p + 2) + (K - 1)
     aic = -2 * ll_new + 2 * num_params
     bic = -2 * ll_new + np.log(T_eff) * num_params
 
     return {
-        'K': K,
-        'phi': phi,
-        'sigma': sigma,
-        'pi': pi,
-        'beta': beta,
-        'loglik': ll_new,
-        'AIC': aic,
-        'BIC': bic,
-        'tau': tau,
-        'X': X,
-        'y': y
+        'K': K, 'phi': phi, 'sigma': sigma, 'beta': beta, 'pi': pi,
+        'loglik': ll_new, 'AIC': aic, 'BIC': bic,
+        'tau': tau, 'X': X, 'y': y, 'dist': 'ged'
     }
 
-# === GRID SEARCH UNTUK MENCARI K TERBAIK ===
-def find_best_K_mar_ged(series, p, K_range, max_iter=100, tol=1e-6):
-    results = []
-    for K in K_range:
-        print(f"🔄 Estimasi MAR-GED untuk K={K}...")
-        model = em_mar_ged_manual(series, p, K, max_iter=max_iter, tol=tol)
-        results.append(model)
+# ================== FUNGSI PREDIKSI ==================
+def predict_mar_normal(model, series, n_steps):
+    series = series.copy()
+    phi, pi, K, p = model['phi'], model['pi'], model['K'], model['phi'].shape[1]
+    history = list(series[-p:])
+    preds = []
+    for _ in range(n_steps):
+        pred = sum(pi[k] * np.dot(phi[k], history[-p:][::-1]) for k in range(K))
+        preds.append(pred)
+        history.append(pred)
+    return np.array(preds)
 
-    best_model = min(results, key=lambda x: x['BIC'])
-    print(f"✅ Model terbaik: K={best_model['K']} (BIC={best_model['BIC']:.2f})")
+def predict_mar_ged(model, series, n_steps):
+    return predict_mar_normal(model, series, n_steps)
 
-    return best_model, pd.DataFrame({
-        'K': [m['K'] for m in results],
-        'LogLik': [m['loglik'] for m in results],
-        'AIC': [m['AIC'] for m in results],
-        'BIC': [m['BIC'] for m in results]
-    })
-# Signifikan
-
-def test_significance_ar_params_mar_ged(X, y, phi, sigma, beta, tau):
-    """
-    Uji signifikansi parameter AR untuk model MAR-GED (phi, sigma, beta).
-    Hanya untuk phi di fungsi ini, sigma dan beta bisa dibuat terpisah jika perlu.
-    """
-    K, p = phi.shape
-    T = len(y)
-    result = []
-
-    for k in range(K):
-        idx_k = tau[:, k] > 1e-3  # hanya gunakan data yang signifikan di komponen k
-
-        for j in range(p):
-            Xj = X[:, j]
-            nom = phi[k, j]
-            denom = np.sum(tau[:, k] * Xj**2)
-            if denom > 0:
-                # Standard error memperhitungkan scale dari GED
-                se = np.sqrt(sigma[k]**2 / denom)
-                z = nom / se
-                p_value = 2 * (1 - norm.cdf(np.abs(z)))
-                result.append({
-                    'Komponen': k+1,
-                    'Parameter': f'phi_{j+1}',
-                    'Estimate': nom,
-                    'Std.Error': se,
-                    'z-value': z,
-                    'p-value': p_value,
-                    'Signifikan': '✅' if p_value < 0.05 else '❌'
-                })
-
-    return pd.DataFrame(result)
-    
-    
-# Residual
+# ================== FUNGSI DIAGNOSTIK ==================
 def compute_residuals_mar(model):
-    """
-    Hitung residual berdasarkan komponen dominan (argmax dari tau)
-    """
-    tau = model['tau']
-    X = model['X']
-    y = model['y']
-    phi = model['phi']
-
+    tau, X, y, phi = model['tau'], model['X'], model['y'], model['phi']
     dominant = np.argmax(tau, axis=1)
-    residuals = np.zeros(len(y))
-    for t in range(len(y)):
-        k = dominant[t]
-        y_pred = X[t] @ phi[k]
-        residuals[t] = y[t] - y_pred
-
+    residuals = y - np.array([X[t] @ phi[k] for t, k in enumerate(dominant)])
     return residuals
 
-def test_residual_assumptions_mar(model, lags=10, ged=False):
-    """
-    Uji asumsi residual MAR (Normal atau GED):
-    - K-S test (Normal jika ged=False, GED jika ged=True)
-    - Ljung-Box test (autokorelasi)
-    """
+def test_residual_assumptions(model, lags=10):
     residuals = compute_residuals_mar(model)
-    residuals_std = (residuals - np.mean(residuals)) / np.std(residuals)
-
-    if ged:
-        # Jika MAR-GED, gunakan rata-rata beta untuk CDF GED
-        beta_avg = np.mean(model['beta'])
-        ks_stat, ks_pval = kstest(residuals_std, lambda x: gennorm.cdf(x, beta_avg))
-        hipotesis = 'Residual mengikuti distribusi GED'
-        keputusan = 'Tolak H0 (Tidak GED)' if ks_pval < 0.05 else 'Gagal Tolak H0 (GED)'
-    else:
-        ks_stat, ks_pval = kstest(residuals_std, 'norm')
-        hipotesis = 'Residual mengikuti distribusi normal'
-        keputusan = 'Tolak H0 (Tidak Normal)' if ks_pval < 0.05 else 'Gagal Tolak H0 (Normal)'
-
-    # Ljung-Box Test
+    resid_std = (residuals - np.mean(residuals)) / np.std(residuals)
+    ks_stat, ks_pval = kstest(resid_std, 'norm')
     lb_result = acorr_ljungbox(residuals, lags=lags, return_df=True)
-    lb_stat = lb_result['lb_stat'].values[-1]
-    lb_pval = lb_result['lb_pvalue'].values[-1]
-    keputusan_lb = 'Tolak H0 (Ada Autokorelasi)' if lb_pval < 0.05 else 'Gagal Tolak H0 (Tidak Ada Autokorelasi)'
-
-    result = pd.DataFrame({
+    result_df = pd.DataFrame({
         'Test': ['Kolmogorov-Smirnov', 'Ljung-Box'],
-        'Statistic': [ks_stat, lb_stat],
-        'p-value': [ks_pval, lb_pval],
-        'Hipotesis Nol (H0)': [hipotesis, 'Tidak ada autokorelasi residual'],
-        'Keputusan': [keputusan, keputusan_lb]
+        'Statistic': [ks_stat, lb_result['lb_stat'].iloc[-1]],
+        'p-value': [ks_pval, lb_result['lb_pvalue'].iloc[-1]],
+        'H0': ['Residual ~ Normal', 'Tidak ada autokorelasi'],
+        'Keputusan': ['Tolak H0' if ks_pval < 0.05 else 'Gagal Tolak H0',
+                      'Tolak H0' if lb_result['lb_pvalue'].iloc[-1] < 0.05 else 'Gagal Tolak H0']
     })
+    return result_df, residuals
 
-    return result, residuals
+# ================== FUNGSI BANTU LAIN ==================
+def convert_logreturn_to_price(last_price, log_returns):
+    prices = [last_price]
+    for r in log_returns:
+        prices.append(prices[-1] * np.exp(r))
+    return np.array(prices[1:])
 
+def compute_price_metrics(actual, pred):
+    mape = mean_absolute_percentage_error(actual, pred)
+    rmse = np.sqrt(mean_squared_error(actual, pred))
+    mae = mean_absolute_error(actual, pred)
+    return mape, rmse, mae
 
-# FORECAST
-def forecast_mar(model, series, n_steps):
-    """
-    Prediksi n_steps ke depan untuk MAR-Normal atau MAR-GED.
-    """
-    series = series.copy()
-    phi = model['phi']
-    pi = model['pi']
-    K = model['K']
-    p = phi.shape[1]
-
-    history = list(series[-p:])  # gunakan p terakhir untuk awal prediksi
-    preds = []
-
-    for _ in range(n_steps):
-        pred_per_komponen = []
-        for k in range(K):
-            ar_part = np.dot(phi[k], history[-p:][::-1])  # lag p dibalik urutannya
-            pred_per_komponen.append(pi[k] * ar_part)
-
-        pred_value = np.sum(pred_per_komponen)
-        preds.append(pred_value)
-        history.append(pred_value)
-
-    # Buat dataframe hasil
-    dates = pd.date_range(start=pd.to_datetime("today").normalize(), periods=n_steps+1, freq='D')[1:]
-    pred_df = pd.DataFrame({
-        "Tanggal": dates,
-        "Prediksi": preds,
-        "Aktual": [np.nan]*n_steps,
-        "Error": [np.nan]*n_steps
-    })
-    return pred_df
 
 # ----------------- Sidebar Navigasi -----------------
 st.sidebar.title("📊 Navigasi")
