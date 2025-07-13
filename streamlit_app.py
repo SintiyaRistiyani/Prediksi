@@ -683,7 +683,7 @@ elif menu == "Prediksi dan Visualisasi":
     st.header("🔮 Prediksi Harga Saham dengan Model MAR")
 
     # Validasi data dan model
-    required_keys = ['log_return_train', 'df', 'best_model', 'harga_col']
+    required_keys = ['log_return_train', 'df', 'best_models', 'harga_col']
     for key in required_keys:
         if key not in st.session_state:
             st.error(f"❌ Data '{key}' belum tersedia. Silakan lakukan input, preprocessing, dan estimasi model terlebih dahulu.")
@@ -691,17 +691,18 @@ elif menu == "Prediksi dan Visualisasi":
 
     log_return_train = st.session_state['log_return_train']
     df = st.session_state['df']
-    best_model = st.session_state['best_model']
-    harga_col = st.session_state['harga_col']
+    best_models = st.session_state['best_models']
+    harga_col = st.session_state['harga_col']  # Nama saham yang dipilih user di halaman Input Data
 
-    nama_saham = st.selectbox("📈 Pilih Saham untuk Diprediksi:", list(best_model.keys()))
+    st.markdown(f"📌 **Saham yang Dipilih:** {harga_col}")
+
     n_steps = st.number_input("📅 Masukkan Jumlah Hari Prediksi:", min_value=1, max_value=90, value=30)
     show_as = st.radio("📊 Tampilkan Hasil Sebagai:", ['Log-Return', 'Harga'])
 
     if st.button("▶️ Prediksi"):
         # Ambil data historis log return saham terpilih
-        X_init = log_return_train[nama_saham].dropna().values
-        model = best_model[nama_saham]
+        X_init = log_return_train[harga_col].dropna().values
+        model = best_models[harga_col]
         dist = model.get('dist', 'normal').lower()
 
         # Fungsi prediksi sesuai distribusi
@@ -713,7 +714,7 @@ elif menu == "Prediksi dan Visualisasi":
             st.error(f"❌ Distribusi model '{dist}' tidak dikenali.")
             st.stop()
 
-        st.success(f"✅ Prediksi {n_steps} hari ke depan untuk {nama_saham} selesai.")
+        st.success(f"✅ Prediksi {n_steps} hari ke depan untuk {harga_col} selesai.")
 
         # Fungsi konversi log-return ke harga
         def logreturn_to_price(last_price, logreturns):
@@ -735,16 +736,16 @@ elif menu == "Prediksi dan Visualisasi":
                 'Hari ke': np.arange(1, n_steps+1),
                 'Harga Prediksi': preds_price
             })
-            st.write(f"### 📋 Tabel Prediksi Harga Saham {nama_saham}")
+            st.write(f"### 📋 Tabel Prediksi Harga Saham {harga_col}")
             st.dataframe(df_pred.style.format({"Harga Prediksi": "Rp {:,.2f}".format}))
 
             # Plot harga prediksi bersama harga historis
             fig, ax = plt.subplots(figsize=(12, 5))
             harga_hist = df[harga_col].dropna()
             ax.plot(harga_hist.index, harga_hist.values, label='Harga Historis', color='blue')
-            future_idx = np.arange(harga_hist.index[-1] + 1, harga_hist.index[-1] + n_steps + 1)
+            future_idx = np.arange(harga_hist.index[-1]+1, harga_hist.index[-1]+n_steps+1)
             ax.plot(future_idx, preds_price, label='Harga Prediksi', linestyle='--', color='orange')
-            ax.set_title(f"📈 Prediksi Harga Saham {nama_saham}")
+            ax.set_title(f"📈 Prediksi Harga Saham {harga_col}")
             ax.set_xlabel("Hari")
             ax.set_ylabel("Harga (Rupiah)")
             ax.legend()
@@ -756,15 +757,15 @@ elif menu == "Prediksi dan Visualisasi":
                 'Hari ke': np.arange(1, n_steps+1),
                 'Log-Return Prediksi': preds_log
             })
-            st.write(f"### 📋 Tabel Prediksi Log-Return Saham {nama_saham}")
+            st.write(f"### 📋 Tabel Prediksi Log-Return Saham {harga_col}")
             st.dataframe(df_pred.style.format({"Log-Return Prediksi": "{:.6f}"}))
 
             # Plot log-return prediksi bersama data historis
             fig, ax = plt.subplots(figsize=(12, 5))
             ax.plot(np.arange(len(X_init)), X_init, label='Log-Return Historis', color='green')
-            future_idx = np.arange(len(X_init), len(X_init) + n_steps)
+            future_idx = np.arange(len(X_init), len(X_init)+n_steps)
             ax.plot(future_idx, preds_log, label='Log-Return Prediksi', linestyle='--', color='red')
-            ax.set_title(f"📈 Prediksi Log-Return Saham {nama_saham}")
+            ax.set_title(f"📈 Prediksi Log-Return Saham {harga_col}")
             ax.set_xlabel("Hari")
             ax.set_ylabel("Log-Return")
             ax.legend()
