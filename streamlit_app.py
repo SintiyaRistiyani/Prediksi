@@ -209,21 +209,6 @@ elif menu == "Data Preprocessing":
     ax.legend()
     st.pyplot(fig)
 
-    # --- Uji Stasioneritas ADF ---
-    st.markdown("### 🧪 Uji Stasioneritas ADF")
-
-    from statsmodels.tsa.stattools import adfuller
-
-    def adf_test(series, name):
-        result = adfuller(series)
-        st.write(f'**ADF Test untuk {name}:**')
-        st.write(f'- ADF Statistic : {result[0]:.4f}')
-        st.write(f'- p-value       : {result[1]:.4f}')
-        st.write(f'- Stationary?   : {"✅ Ya" if result[1] < 0.05 else "⚠️ Tidak"}')
-        st.write("---")
-
-    adf_test(train['Log Return'], harga_col)
-
     
 # ----------------- Halaman Uji Stasioneritas -----------------
 elif menu == "Stasioneritas":
@@ -240,14 +225,21 @@ elif menu == "Stasioneritas":
     # Panggil fungsi dengan log return dari data train
     diagnostik_saham(train['Log Return'], harga_col)
 
-    # === Fungsi Uji ADF ===
-    adf_result = check_stationarity(train['Log Return'])
-    st.markdown("### 🔍 Hasil Uji ADF")
-    st.write(f"**ADF Statistic:** {adf_result[0]:.4f}")
-    st.write(f"**p-value:** {adf_result[1]:.4f}")
-    st.write("**Kesimpulan:**", 
-             "✅ Stasioner (p < 0.05)" if adf_result[1] < 0.05 else "⚠️ Tidak Stasioner (p ≥ 0.05)")
+    # --- Uji Stasioneritas ADF ---
+    st.markdown("### 🧪 Uji Stasioneritas ADF")
 
+    from statsmodels.tsa.stattools import adfuller
+
+    def adf_test(series, name):
+        result = adfuller(series)
+        st.write(f'**ADF Test untuk {name}:**')
+        st.write(f'- ADF Statistic : {result[0]:.4f}')
+        st.write(f'- p-value       : {result[1]:.4f}')
+        st.write(f'- Stationary?   : {"✅ Ya" if result[1] < 0.05 else "⚠️ Tidak"}')
+        st.write("---")
+
+    adf_test(train['Log Return'], harga_col)
+    
     # === Plot ACF & PACF ===
     st.markdown("### 🔁 ACF dan PACF Plot")
     fig, axes = plt.subplots(1, 2, figsize=(12, 4))
