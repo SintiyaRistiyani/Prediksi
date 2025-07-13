@@ -129,67 +129,57 @@ elif menu == "Stasioneritas":
     st.title("📉 Uji Stasioneritas & Diagnostik Distribusi")
 
     # Validasi data
-    if 'log_return_train' not in st.session_state or 'harga_cols' not in st.session_state:
+    if 'log_return_train' not in st.session_state:
         st.warning("Silakan lakukan preprocessing terlebih dahulu.")
         st.stop()
 
     log_return_train = st.session_state['log_return_train']
-    harga_cols = st.session_state['harga_cols']
 
-    from statsmodels.tsa.stattools import adfuller
-    from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
-    from scipy.stats import skew, kurtosis
-    import seaborn as sns
+    st.subheader("📌 Diagnostik Log Return")
 
-    # Loop setiap saham
-    for col in harga_cols:
-        st.subheader(f"📌 Diagnostik untuk {col}")
+    series = log_return_train['Log Return'].dropna()
 
-        series = log_return_train[col].dropna()
+    # === Uji Stasioneritas ADF ===
+    st.markdown("#### 🧪 Uji Stasioneritas ADF")
+    result = adfuller(series)
+    st.write(f"- **ADF Statistic** : {result[0]:.4f}")
+    st.write(f"- **p-value**       : {result[1]:.4f}")
+    st.write(f"- **Stationary?**   : {'✅ Ya' if result[1] < 0.05 else '⚠️ Tidak'}")
 
-        # === Uji Stasioneritas ADF ===
-        st.markdown("#### 🧪 Uji Stasioneritas ADF")
-        result = adfuller(series)
-        st.write(f"- **ADF Statistic** : {result[0]:.4f}")
-        st.write(f"- **p-value**       : {result[1]:.4f}")
-        st.write(f"- **Stationary?**   : {'✅ Ya' if result[1] < 0.05 else '⚠️ Tidak'}")
+    # === Uji Skewness & Kurtosis ===
+    st.markdown("#### 📊 Skewness & Kurtosis")
+    skw = skew(series)
+    krt = kurtosis(series)
+    st.write(f"- **Skewness** : {skw:.4f}")
+    st.write(f"- **Kurtosis** : {krt:.4f}")
 
-        # === Uji Skewness & Kurtosis ===
-        st.markdown("#### 📊 Skewness & Kurtosis")
-        skw = skew(series)
-        krt = kurtosis(series)
-        st.write(f"- **Skewness** : {skw:.4f}")
-        st.write(f"- **Kurtosis** : {krt:.4f}")
+    # === Visualisasi Distribusi (Histogram + KDE) ===
+    st.markdown("#### 📈 Distribusi Log Return")
+    fig, ax = plt.subplots(figsize=(8, 4))
+    sns.histplot(series, kde=True, bins=30, color='skyblue', ax=ax)
+    ax.set_title('Distribusi Log Return')
+    ax.set_xlabel('Log Return')
+    ax.set_ylabel('Frekuensi')
+    st.pyplot(fig)
 
-        # === Visualisasi Distribusi (Histogram + KDE) ===
-        st.markdown("#### 📈 Distribusi Log Return")
-        fig, ax = plt.subplots(figsize=(8, 4))
-        sns.histplot(series, kde=True, bins=30, color='skyblue', ax=ax)
-        ax.set_title(f'Distribusi Log Return {col}')
-        ax.set_xlabel('Log Return')
-        ax.set_ylabel('Frekuensi')
-        st.pyplot(fig)
+    # === Plot ACF & PACF ===
+    st.markdown("#### 🔁 Plot ACF & PACF")
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    plot_acf(series, lags=20, ax=axes[0])
+    axes[0].set_title('ACF')
+    plot_pacf(series, lags=20, ax=axes[1], method='ywm')
+    axes[1].set_title('PACF')
+    st.pyplot(fig)
 
-        # === Plot ACF & PACF ===
-        st.markdown("#### 🔁 Plot ACF & PACF")
-        fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-        plot_acf(series, lags=20, ax=axes[0])
-        axes[0].set_title(f'ACF - {col}')
-        plot_pacf(series, lags=20, ax=axes[1], method='ywm')
-        axes[1].set_title(f'PACF - {col}')
-        st.pyplot(fig)
-
-        # === Visualisasi Time Series Log Return ===
-        st.markdown("#### 🕒 Plot Log Return")
-        fig, ax = plt.subplots(figsize=(10, 4))
-        ax.plot(series, color='red')
-        ax.set_title(f'Log Return Train - {col}')
-        ax.set_xlabel('Tanggal')
-        ax.set_ylabel('Log Return')
-        ax.grid(True)
-        st.pyplot(fig)
-
-        st.markdown("---")  # Pemisah antar saham
+    # === Visualisasi Time Series Log Return ===
+    st.markdown("#### 🕒 Plot Log Return")
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(log_return_train['Date'], series, color='red')
+    ax.set_title('Log Return Train')
+    ax.set_xlabel('Tanggal')
+    ax.set_ylabel('Log Return')
+    ax.grid(True)
+    st.pyplot(fig)
 
 # ==================================== HALAMAN MODEL =======================================================
 elif menu == "Model":
