@@ -752,22 +752,6 @@ elif menu == "Prediksi dan Visualisasi":
 
         return np.array(preds)
 
-    # Cari kolom saham di log_return_train (case-insensitive)
-    log_cols = [col.strip().upper() for col in log_return_train.columns if col != 'Date']
-    harga_col_upper = harga_col.strip().upper()
-
-    if harga_col_upper in log_cols:
-        matched_col = log_return_train.columns[log_cols.index(harga_col_upper)]
-    else:
-        st.warning(f"⚠️ Kolom saham '{harga_col}' tidak ditemukan di log_return_train. Menggunakan kolom kedua (jika ada).")
-        # Asumsi kolom kedua selain 'Date'
-        all_cols = [col for col in log_return_train.columns if col != 'Date']
-        if len(all_cols) > 0:
-            matched_col = all_cols[0]
-        else:
-            st.error("Tidak ada kolom saham yang tersedia di log_return_train.")
-            st.stop()
-
     n_steps = st.number_input("📅 Masukkan Jumlah Hari Prediksi:", min_value=1, max_value=90, value=30)
     show_as = st.radio("📊 Tampilkan Hasil Sebagai:", ['Log-Return', 'Harga'])
 
