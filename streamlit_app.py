@@ -224,7 +224,6 @@ elif menu == "Stasioneritas":
     diagnostik_saham(train['Log Return'], harga_col)
 
     # === Fungsi Uji ADF ===
-    # Hitung ADF
     adf_result = check_stationarity(train['Log Return'])
     st.markdown("### 🔍 Hasil Uji ADF")
     st.write(f"**ADF Statistic:** {adf_result[0]:.4f}")
@@ -233,33 +232,30 @@ elif menu == "Stasioneritas":
              "✅ Stasioner (p < 0.05)" if adf_result[1] < 0.05 else "⚠️ Tidak Stasioner (p ≥ 0.05)")
 
     # === Plot ACF & PACF ===
-
     st.markdown("### 🔁 ACF dan PACF Plot")
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
-fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    plot_acf(train['Log Return'], ax=axes[0], lags=20)
+    axes[0].set_title("ACF")
 
-plot_acf(train['Log Return'], ax=axes[0], lags=20)
-axes[0].set_title("ACF")
+    plot_pacf(train['Log Return'], ax=axes[1], lags=20, method='ywm')
+    axes[1].set_title("PACF")
 
-plot_pacf(train['Log Return'], ax=axes[1], lags=20, method='ywm')
-axes[1].set_title("PACF")
+    st.pyplot(fig)
 
-st.pyplot(fig)
+    # Skewness dan Kurtosis
+    skw = skew(train['Log Return'])
+    krt = kurtosis(train['Log Return'])
+    st.write(f"**Skewness:** {skw:.4f}")
+    st.write(f"**Kurtosis:** {krt:.4f}")
 
-        
-skw = skew(train['Log Return'])
-krt = kurtosis(train['Log Return'])
-st.write(f"**Skewness:** {skw:.4f}")
-st.write(f"**Kurtosis:** {krt:.4f}")
-
-    
-# Visualisasi histogram + KDE
-fig, ax = plt.subplots(figsize=(10, 4))
-sns.histplot(train['Log Return'], kde=True, bins=30, color='skyblue', ax=ax)
-ax.set_title(f'Distribusi Log Return {harga_col}')
-ax.set_xlabel('Log Return')
-ax.set_ylabel('Frekuensi')
-st.pyplot(fig)
+    # Visualisasi histogram + KDE
+    fig, ax = plt.subplots(figsize=(10, 4))
+    sns.histplot(train['Log Return'], kde=True, bins=30, color='skyblue', ax=ax)
+    ax.set_title(f'Distribusi Log Return {harga_col}')
+    ax.set_xlabel('Log Return')
+    ax.set_ylabel('Frekuensi')
+    st.pyplot(fig)
 
 # ===================== MENU: Model =====================
 elif menu == "Model":
