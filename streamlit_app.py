@@ -244,6 +244,7 @@ def test_significance_mar(result):
         se_sigma = sigma[k] / np.sqrt(2 * np.sum(r_k))
         z_sigma = sigma[k] / se_sigma
         pval_sigma = 2 * (1 - norm.cdf(np.abs(z_sigma)))
+    
 
         # --- Standard error pi ---
         se_pi = np.sqrt(pi[k] * (1 - pi[k]) / T_eff)
