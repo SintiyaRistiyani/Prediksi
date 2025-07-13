@@ -696,17 +696,19 @@ elif menu == "Prediksi dan Visualisasi":
 
     st.markdown(f"📌 **Saham yang Dipilih:** {harga_col}")
 
-    # Sinkronisasi nama kolom (case insensitive)
-    log_cols = [col.strip().upper() for col in log_return_train.columns]
-    harga_col_upper = harga_col.strip().upper()
-    if harga_col_upper in log_cols:
-        matched_col = log_return_train.columns[log_cols.index(harga_col_upper)]
-    else:
-        st.warning(f"⚠️ Kolom {harga_col} tidak ditemukan di log_return_train. Menggunakan kolom pertama.")
-        matched_col = log_return_train.columns[0]
+    log_return_train = st.session_state['log_return_train']
+    df = st.session_state['df']
+    best_model = st.session_state['best_model']
+    harga_col = st.session_state['harga_col']
+
+    st.markdown(f"📌 **Saham yang Dipilih:** {harga_col}")
+
+    # Karena log_return_train hanya ada 'Date' dan 'Log Return', gunakan kolom 'Log Return' saja
+    matched_col = 'Log Return'
 
     n_steps = st.number_input("📅 Masukkan Jumlah Hari Prediksi:", min_value=1, max_value=90, value=30)
     show_as = st.radio("📊 Tampilkan Hasil Sebagai:", ['Log-Return', 'Harga'])
+
 
     # Fungsi konversi log-return ke harga (rekursif)
     def convert_logreturn_to_price(last_price, logreturns):
