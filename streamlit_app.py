@@ -230,11 +230,11 @@ elif menu == "Stasioneritas":
     ax[1].set_title("PACF")
     st.pyplot(fig)
         
-    # Skewness & Kurtosis
-    skw = skew(series)
-    krt = kurtosis(series)
+    skw = skew(train['Log Return'])
+    krt = kurtosis(train['Log Return'])
     st.write(f"**Skewness:** {skw:.4f}")
     st.write(f"**Kurtosis:** {krt:.4f}")
+
     
     # Visualisasi histogram + KDE
     fig, ax = plt.subplots(figsize=(10, 4))
