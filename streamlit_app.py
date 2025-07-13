@@ -933,27 +933,22 @@ elif menu == "Uji Signifikansi dan Residual":
         ax.set_title("Distribusi Residual MAR-GED")
         st.pyplot(fig)
 
-# ===================================== PREDIKSI DAN VISUALISASI===============================================
-# Fungsi Konversi Log-Return ke Harga
-# ---------------------------
+# ============================ FUNGSI KONVERSI DAN METRIK ============================
 def convert_logreturn_to_price(last_price, log_returns):
     prices = [last_price]
     for r in log_returns:
         prices.append(prices[-1] * np.exp(r))
     return np.array(prices[1:])
 
-# ---------------------------
-# Fungsi Performa Harga
-# ---------------------------
 def compute_price_metrics(actual, pred):
     mape = mean_absolute_percentage_error(actual, pred)
     rmse = np.sqrt(mean_squared_error(actual, pred))
     mae = mean_absolute_error(actual, pred)
     return mape, rmse, mae
 
-# ---------------------------
-# Halaman Prediksi
-elif menu == "Prediksi dan Visualisasi":
+# ============================ HALAMAN PREDIKSI DAN VISUALISASI ============================
+
+if menu == "Prediksi dan Visualisasi":
     st.header("🔮 Prediksi Harga & Visualisasi")
 
     nama_saham = st.selectbox("Pilih Saham", list(log_return_train.columns))
@@ -964,95 +959,94 @@ elif menu == "Prediksi dan Visualisasi":
     model = best_models[nama_saham]
     data_train_saham = log_return_train[nama_saham].dropna().values
 
-if mode_prediksi == 'Out-of-Sample':
-    st.subheader(f"📈 Out-of-Sample Prediction: {nama_saham}")
+    if mode_prediksi == 'Out-of-Sample':
+        st.subheader(f"📈 Out-of-Sample Prediction: {nama_saham}")
 
-    y_test_actual = log_return_test[nama_saham].dropna().values
-    y_test_pred = model['y_pred_outsample']  # Pastikan output ini ada di model kamu
+        y_test_actual = log_return_test[nama_saham].dropna().values
+        y_test_pred = model['y_pred_outsample']  # Pastikan output ini ada di model kamu
 
-    if show_as == 'Log-Return':
-        # Visualisasi Log-Return
-        fig, ax = plt.subplots(figsize=(10,4))
-        ax.plot(y_test_actual, label='Aktual', color='black')
-        ax.plot(y_test_pred, label='Prediksi', color='blue', linestyle='--')
-        ax.set_title(f'Aktual vs Prediksi Out-of-Sample (Log-Return) - {nama_saham}')
-        ax.legend()
-        st.pyplot(fig)
+        if show_as == 'Log-Return':
+            fig, ax = plt.subplots(figsize=(10,4))
+            ax.plot(y_test_actual, label='Aktual', color='black')
+            ax.plot(y_test_pred, label='Prediksi', color='blue', linestyle='--')
+            ax.set_title(f'Aktual vs Prediksi Out-of-Sample (Log-Return) - {nama_saham}')
+            ax.legend()
+            st.pyplot(fig)
 
-    else:
-        # Visualisasi Harga
-        first_test_idx = log_return_test.index[0]
-        idx_loc = df.index.get_loc(first_test_idx)
-        last_price = df.iloc[idx_loc - 1][nama_saham]
+        else:
+            first_test_idx = log_return_test.index[0]
+            idx_loc = df.index.get_loc(first_test_idx)
+            last_price = df.iloc[idx_loc - 1][nama_saham]
 
-        actual_price = convert_logreturn_to_price(last_price, y_test_actual)
-        pred_price = convert_logreturn_to_price(last_price, y_test_pred)
+            actual_price = convert_logreturn_to_price(last_price, y_test_actual)
+            pred_price = convert_logreturn_to_price(last_price, y_test_pred)
 
-        fig, ax = plt.subplots(figsize=(10,4))
-        ax.plot(actual_price, label='Harga Aktual', color='black')
-        ax.plot(pred_price, label='Harga Prediksi', color='red', linestyle='--')
-        ax.set_title(f'Out-of-Sample Harga: {nama_saham}')
-        ax.legend()
-        st.pyplot(fig)
+            fig, ax = plt.subplots(figsize=(10,4))
+            ax.plot(actual_price, label='Harga Aktual', color='black')
+            ax.plot(pred_price, label='Harga Prediksi', color='red', linestyle='--')
+            ax.set_title(f'Out-of-Sample Harga: {nama_saham}')
+            ax.legend()
+            st.pyplot(fig)
 
-        # Performa Harga
-        mape, rmse, mae = compute_price_metrics(actual_price, pred_price)
+            mape, rmse, mae = compute_price_metrics(actual_price, pred_price)
 
-        st.write("📊 **Tabel Performa Out-of-Sample (Harga)**")
-        df_perf = pd.DataFrame({
-            'MAPE (%)': [mape*100],
-            'RMSE': [rmse],
-            'MAE': [mae]
+            st.write("📊 **Tabel Performa Out-of-Sample (Harga)**")
+            df_perf = pd.DataFrame({
+                'MAPE (%)': [mape*100],
+                'RMSE': [rmse],
+                'MAE': [mae]
+            })
+            st.dataframe(df_perf)
+
+        # Download CSV Out-of-Sample
+        df_outsample = pd.DataFrame({
+            'Aktual': y_test_actual if show_as == 'Log-Return' else actual_price,
+            'Prediksi': y_test_pred if show_as == 'Log-Return' else pred_price
         })
-        st.dataframe(df_perf)
-
-    # Download CSV
-    df_outsample = pd.DataFrame({
-        'Aktual': y_test_actual if show_as == 'Log-Return' else actual_price,
-        'Prediksi': y_test_pred if show_as == 'Log-Return' else pred_price
-    })
-    csv_out = df_outsample.to_csv(index=False).encode('utf-8')
-    st.download_button("⬇️ Download Out-of-Sample (CSV)", csv_out, file_name=f'out_sample_{nama_saham}.csv')
-
-else:
-    st.subheader(f"🔮 Forecast {nama_saham} 30 Langkah ke Depan")
-
-    n_steps = 30
-    pred_log = predict_mar_normal(model, data_train_saham, n_steps=n_steps)
-
-    if show_as == 'Log-Return':
-        fig, ax = plt.subplots(figsize=(10,4))
-        ax.plot(np.arange(len(data_train_saham)), data_train_saham, label='Data Historis', color='black')
-        ax.plot(np.arange(len(data_train_saham), len(data_train_saham)+n_steps), pred_log,
-                label='Forecast', color='red', linestyle='--')
-        ax.set_title(f'Forecasting Log-Return: {nama_saham}')
-        ax.legend()
-        st.pyplot(fig)
+        csv_out = df_outsample.to_csv(index=False).encode('utf-8')
+        st.download_button("⬇️ Download Out-of-Sample (CSV)", csv_out, file_name=f'out_sample_{nama_saham}.csv')
 
     else:
-        # Konversi ke Harga
-        last_price = df.iloc[-1][nama_saham]
-        pred_price = convert_logreturn_to_price(last_price, pred_log)
+        st.subheader(f"🔮 Forecast {nama_saham} 30 Langkah ke Depan")
 
-        harga_hist = df[nama_saham].dropna().values
+        n_steps = 30
 
-        fig, ax = plt.subplots(figsize=(10,4))
-        ax.plot(np.arange(len(harga_hist)), harga_hist, label='Data Historis', color='black')
-        ax.plot(np.arange(len(harga_hist), len(harga_hist)+n_steps), pred_price,
-                label='Forecast Harga', color='red', linestyle='--')
-        ax.set_title(f'Forecasting Harga: {nama_saham}')
-        ax.legend()
-        st.pyplot(fig)
+        # Pilih fungsi prediksi sesuai model
+        if model['dist'] == 'normal':
+            pred_log = predict_mar_normal(model, data_train_saham, n_steps=n_steps)
+        else:
+            pred_log = predict_mar_ged(model, data_train_saham, n_steps=n_steps)
 
-    # Download CSV
-    df_forecast = pd.DataFrame({
-        'Step': np.arange(1, n_steps+1),
-        'Prediksi': pred_log if show_as == 'Log-Return' else pred_price
-    })
-    st.write("📊 **Tabel Forecasting**")
-    st.dataframe(df_forecast)
+        if show_as == 'Log-Return':
+            fig, ax = plt.subplots(figsize=(10,4))
+            ax.plot(np.arange(len(data_train_saham)), data_train_saham, label='Data Historis', color='black')
+            ax.plot(np.arange(len(data_train_saham), len(data_train_saham)+n_steps), pred_log,
+                    label='Forecast', color='red', linestyle='--')
+            ax.set_title(f'Forecasting Log-Return: {nama_saham}')
+            ax.legend()
+            st.pyplot(fig)
 
-    csv_forecast = df_forecast.to_csv(index=False).encode('utf-8')
-    st.download_button("⬇️ Download Forecast (CSV)", csv_forecast, file_name=f'forecast_{nama_saham}.csv')
+        else:
+            last_price = df.iloc[-1][nama_saham]
+            pred_price = convert_logreturn_to_price(last_price, pred_log)
 
+            harga_hist = df[nama_saham].dropna().values
 
+            fig, ax = plt.subplots(figsize=(10,4))
+            ax.plot(np.arange(len(harga_hist)), harga_hist, label='Data Historis', color='black')
+            ax.plot(np.arange(len(harga_hist), len(harga_hist)+n_steps), pred_price,
+                    label='Forecast Harga', color='red', linestyle='--')
+            ax.set_title(f'Forecasting Harga: {nama_saham}')
+            ax.legend()
+            st.pyplot(fig)
+
+        df_forecast = pd.DataFrame({
+            'Step': np.arange(1, n_steps+1),
+            'Prediksi': pred_log if show_as == 'Log-Return' else pred_price
+        })
+
+        st.write("📊 **Tabel Forecasting**")
+        st.dataframe(df_forecast)
+
+        csv_forecast = df_forecast.to_csv(index=False).encode('utf-8')
+        st.download_button("⬇️ Download Forecast (CSV)", csv_forecast, file_name=f'forecast_{nama_saham}.csv')
