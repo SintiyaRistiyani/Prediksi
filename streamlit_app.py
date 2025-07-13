@@ -266,83 +266,79 @@ elif menu == "Stasioneritas":
     ax.set_ylabel('Frekuensi')
     st.pyplot(fig)
 
-# ===================== MENU: Model =====================
 elif menu == "Model":
 
     st.title("🏗️ Pemodelan Mixture Autoregressive (MAR)")
 
-    # ------- pastikan data sudah ada ----------
+    # Validasi data
     if 'log_return_train' not in st.session_state:
         st.warning("Lakukan preprocessing terlebih dahulu.")
         st.stop()
 
     series = st.session_state['log_return_train'].values
 
-    # 1. user pilih jenis distribusi
-    model_choice = st.selectbox("Jenis Distribusi Komponen:", 
+    # Pilihan model
+    model_choice = st.selectbox("Pilih Jenis Distribusi Komponen:", 
                                 ["MAR-Normal", "MAR-GED"])
 
-    # 2. user masukkan orde AR (p) hasil observasi ACF‑PACF
-    p_input = st.number_input("Orde AR (p) hasil analisis ACF/PACF:", 
-                              min_value=1, max_value=5, value=1, step=1)
+    # Input p dan K_max
+    p_input = st.number_input("Masukkan orde AR (p):", min_value=1, max_value=5, value=1)
+    k_max = st.slider("Pilih K maksimal (jumlah komponen):", min_value=2, max_value=5, value=3)
 
-    # 3. batas maksimum K yang akan di‑grid‑search
-    max_K = st.slider("Pencarian K maksimal:", 2, 5, 3)
-
-    # 4. tombol eksekusi penuh
+    # Eksekusi pencarian model terbaik
     if st.button("🔍 Cari K Terbaik & Estimasi Model"):
-        with st.spinner("Menjalankan pemodelan ..."):
+        with st.spinner("Menjalankan proses EM dan pencarian K..."):
 
-            # =====================================================
-            # A) Pencarian K terbaik   ---------------------------
-            # =====================================================
             if model_choice == "MAR-Normal":
-                best_model, df_k = find_best_K(series, p_input, 
-                                               range(1, max_K + 1))
-            else:
-                # fungsi find_best_K_ged Anda, konsep sama
-                best_model, df_k = find_best_K_ged(series, p_input, 
-                                                   range(1, max_K + 1))
+                best_model, df_bic = find_best_K(series, p_input, range(1, k_max + 1))
 
-            best_k = best_model["K"]
-            st.success(f"K terbaik: {best_k} (BIC = {best_model['BIC']:.2f})")
+                st.success(f"✅ Model MAR-Normal terbaik: K={best_model['K']} (BIC={best_model['BIC']:.2f})")
 
-            # Simpan hasil ke session_state
-            st.session_state.update({
-                'best_model' : best_model,
-                'best_p'     : p_input,
-                'best_k'     : best_k,
-                'model_type' : model_choice,
-                'ar_params'  : best_model['phi'],
-                'sigmas'     : best_model['sigma'],
-                'weights'    : best_model['pi']
-            })
+                st.markdown("### 📊 Tabel BIC (MAR-Normal)")
+                st.dataframe(df_bic.style.format({"LogLik": "{:.2f}", "AIC": "{:.2f}", "BIC": "{:.2f}"}))
 
-            # =====================================================
-            # B) Uji signifikansi parameter   --------------------
-            # =====================================================
-            #  (contoh cepat: t‑stat = phi / se; se = sqrt(σ² * (X'X)⁻¹) )
-            sig_df = parameter_significance(best_model)      # definisikan fungsi ini
-            st.subheader("📊 Uji Signifikansi Parameter")
-            st.dataframe(sig_df.style.format("{:.4f}"))
+                # Parameter output
+                phi = best_model['phi']
+                sigma = best_model['sigma']
+                pi = best_model['pi']
 
-            # =====================================================
-            # C) Diagnostik Residual -----------------------------
-            # =====================================================
-            resid = best_model['y'] - (best_model['X'] @ 
-                                       best_model['phi'][np.argmax(best_model['pi'])])
-            diag_residual(resid)     # fungsi: plot ACF resid, Ljung‑Box, JB, dsb.
+                param_data = []
+                for k in range(best_model['K']):
+                    row = {f"phi{j+1}": phi[k, j] for j in range(p_input)}
+                    row.update({"Komponen": k+1, "sigma": sigma[k], "pi": pi[k]})
+                    param_data.append(row)
 
-            # =====================================================
-            # D) Prediksi Out‑of‑Sample --------------------------
-            # =====================================================
-            n_forecast = st.number_input("Horizon Prediksi:", 1, 60, 30)
-            if st.button("🚀 Prediksi Out‑of‑Sample"):
-                pred_df = forecast_mar(best_model, series, n_forecast)
-                st.subheader("📈 Prediksi vs Aktual")
-                st.line_chart(pred_df.set_index("Tanggal"))
+                st.markdown("### 🔧 Parameter MAR-Normal")
+                st.dataframe(pd.DataFrame(param_data).round(4))
 
-                mape = np.mean(np.abs(pred_df['Error'] / pred_df['Aktual'])) * 100
-                st.write(f"MAPE: **{mape:.2f}%**")
+            else:  # MAR-GED
+                best_model, df_bic = find_best_K_mar_ged(series, p_input, range(1, k_max + 1))
+
+                st.success(f"✅ Model MAR-GED terbaik: K={best_model['K']} (BIC={best_model['BIC']:.2f})")
+
+                st.markdown("### 📊 Tabel BIC (MAR-GED)")
+                st.dataframe(df_bic.style.format({"LogLik": "{:.2f}", "AIC": "{:.2f}", "BIC": "{:.2f}"}))
+
+                # Parameter output
+                phi = best_model['phi']
+                sigma = best_model['sigma']
+                beta = best_model['beta']
+                pi = best_model['pi']
+
+                param_data = []
+                for k in range(best_model['K']):
+                    row = {f"phi{j+1}": phi[k, j] for j in range(p_input)}
+                    row.update({"Komponen": k+1, "sigma": sigma[k], "beta": beta[k], "pi": pi[k]})
+                    param_data.append(row)
+
+                st.markdown("### 🔧 Parameter MAR-GED")
+                st.dataframe(pd.DataFrame(param_data).round(4))
+
+            # Simpan ke session_state untuk keperluan selanjutnya (uji residual, prediksi, dll)
+            st.session_state['best_model'] = best_model
+            st.session_state['model_choice'] = model_choice
+            st.session_state['best_k'] = best_model['K']
+            st.session_state['best_p'] = p_input
+
 
 # =================== PREDIKSI DAN VISUALISASI===========================
