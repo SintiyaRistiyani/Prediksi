@@ -446,7 +446,6 @@ elif menu == "Model":
                 st.error("❌ Tidak ada model yang berhasil diestimasi.")
 
 
-# ============================== UJI SIGNIFIKANDI DAN RESIDUAL===================================================
 elif menu == "Uji Signifikansi dan Residual":
 
     st.title("🧪 Uji Signifikansi Parameter & Diagnostik Residual")
@@ -460,21 +459,215 @@ elif menu == "Uji Signifikansi dan Residual":
 
     st.header("📌 Uji Signifikansi Parameter")
 
+    # Fungsi uji signifikansi MAR-Normal
+    def test_significance_mar(result):
+        from scipy.stats import norm
+        import numpy as np
+        import pandas as pd
+
+        phi = result['phi']         # (K x p)
+        sigma = result['sigma']     # (K,)
+        pi = result['pi']           # (K,)
+        tau = result['tau']         # (T x K)
+        X = result['X']             # (T x p)
+        y = result['y']             # (T,)
+        T_eff = len(y)
+
+        K, p = phi.shape
+        sig_results = []
+
+        for k in range(K):
+            r_k = tau[:, k]
+            W = np.diag(r_k)
+
+            try:
+                XtWX = X.T @ W @ X
+                XtWX += 1e-6 * np.eye(p)
+                cov_phi = sigma[k]**2 * np.linalg.inv(XtWX)
+                se_phi = np.sqrt(np.diag(cov_phi))
+            except np.linalg.LinAlgError:
+                se_phi = np.full(p, np.nan)
+
+            z_phi = phi[k] / se_phi
+            pval_phi = 2 * (1 - norm.cdf(np.abs(z_phi)))
+
+            se_sigma = sigma[k] / np.sqrt(2 * np.sum(r_k))
+            z_sigma = sigma[k] / se_sigma
+            pval_sigma = 2 * (1 - norm.cdf(np.abs(z_sigma)))
+
+            se_pi = np.sqrt(pi[k] * (1 - pi[k]) / T_eff)
+            z_pi = pi[k] / se_pi
+            pval_pi = 2 * (1 - norm.cdf(np.abs(z_pi)))
+
+            for j in range(p):
+                sig_results.append({
+                    'Komponen': k + 1,
+                    'Parameter': f'phi_{j+1}',
+                    'Estimate': phi[k, j],
+                    'Std.Err': se_phi[j],
+                    'z-value': z_phi[j],
+                    'p-value': pval_phi[j]
+                })
+
+            sig_results.append({
+                'Komponen': k + 1,
+                'Parameter': 'sigma',
+                'Estimate': sigma[k],
+                'Std.Err': se_sigma,
+                'z-value': z_sigma,
+                'p-value': pval_sigma
+            })
+            sig_results.append({
+                'Komponen': k + 1,
+                'Parameter': 'pi',
+                'Estimate': pi[k],
+                'Std.Err': se_pi,
+                'z-value': z_pi,
+                'p-value': pval_pi
+            })
+
+        return pd.DataFrame(sig_results)
+
+    # Fungsi uji signifikansi MAR-GED (AR params saja)
+    def test_significance_ar_params_mar(X, y, phi, sigma, tau):
+        from scipy.stats import norm
+        import numpy as np
+        import pandas as pd
+
+        K, p = phi.shape
+        result = []
+
+        for k in range(K):
+            for j in range(p):
+                nom = phi[k, j]
+                denom = np.sum(tau[:, k] * X[:, j]**2)
+                if denom > 0:
+                    se = np.sqrt(sigma[k]**2 / denom)
+                    z = nom / se
+                    p_value = 2 * (1 - norm.cdf(np.abs(z)))
+                    result.append({
+                        'Komponen': k + 1,
+                        'AR Index': f'phi_{j+1}',
+                        'Estimate': nom,
+                        'Std Error': se,
+                        'z-value': z,
+                        'p-value': p_value,
+                        'Signifikan': '✅' if p_value < 0.05 else '❌'
+                    })
+
+        return pd.DataFrame(result)
+
+    # Fungsi hitung residual MAR-Normal
+    def compute_mar_residuals(result):
+        import numpy as np
+
+        tau = result['tau']         # (T x K)
+        X = result['X']             # (T x p)
+        y = result['y']             # (T,)
+        phi = result['phi']         # (K x p)
+
+        dominant_comp = np.argmax(tau, axis=1)
+        residuals = np.zeros(len(y))
+
+        for t in range(len(y)):
+            k = dominant_comp[t]
+            residuals[t] = y[t] - X[t] @ phi[k]
+
+        return residuals
+
+    # Fungsi uji residual MAR-Normal
+    def test_residual_assumptions(result, lags=10, alpha=0.05):
+        from scipy.stats import kstest
+        from statsmodels.stats.diagnostic import acorr_ljungbox
+        import numpy as np
+        import pandas as pd
+
+        residuals = compute_mar_residuals(result)
+        resid_std = (residuals - np.mean(residuals)) / np.std(residuals)
+
+        ks_stat, ks_pvalue = kstest(resid_std, 'norm')
+        ks_decision = 'Tolak H0 (Tidak Normal)' if ks_pvalue < alpha else 'Gagal Tolak H0 (Normal)'
+
+        lb_result = acorr_ljungbox(residuals, lags=lags, return_df=True)
+        lb_stat = lb_result['lb_stat'].values[-1]
+        lb_pvalue = lb_result['lb_pvalue'].values[-1]
+        lb_decision = 'Tolak H0 (Ada Autokorelasi)' if lb_pvalue < alpha else 'Gagal Tolak H0 (Tidak Ada Autokorelasi)'
+
+        result_summary = pd.DataFrame({
+            'Test': ['Kolmogorov-Smirnov', 'Ljung-Box'],
+            'Statistic': [ks_stat, lb_stat],
+            'p-value': [ks_pvalue, lb_pvalue],
+            'Hipotesis Nol (H0)': ['Residual mengikuti distribusi normal', 'Tidak ada autokorelasi residual'],
+            'Keputusan': [ks_decision, lb_decision]
+        })
+
+        return result_summary, residuals
+
+    # Fungsi hitung residual MAR-GED
+    def compute_residuals_mar(model):
+        import numpy as np
+
+        tau = model['tau']
+        X = model['X']
+        y = model['y']
+        phi = model['phi']
+
+        dominant = np.argmax(tau, axis=1)
+        residuals = np.zeros(len(y))
+        for t in range(len(y)):
+            k = dominant[t]
+            y_pred = X[t] @ phi[k]
+            residuals[t] = y[t] - y_pred
+
+        return residuals
+
+    # Fungsi uji residual MAR-GED
+    def test_residual_assumptions_mar(model, lags=10):
+        from scipy.stats import kstest
+        from statsmodels.stats.diagnostic import acorr_ljungbox
+        import numpy as np
+        import pandas as pd
+
+        residuals = compute_residuals_mar(model)
+        residuals_std = (residuals - np.mean(residuals)) / np.std(residuals)
+
+        ks_stat, ks_pval = kstest(residuals_std, 'norm')
+
+        lb_result = acorr_ljungbox(residuals, lags=lags, return_df=True)
+        lb_stat = lb_result['lb_stat'].values[-1]
+        lb_pval = lb_result['lb_pvalue'].values[-1]
+
+        result = pd.DataFrame({
+            'Test': ['Kolmogorov-Smirnov', 'Ljung-Box'],
+            'Statistic': [ks_stat, lb_stat],
+            'p-value': [ks_pval, lb_pval],
+            'Hipotesis Nol (H0)': ['Residual mengikuti distribusi normal',
+                                   'Tidak ada autokorelasi residual'],
+            'Keputusan': ['Tolak H0 (Tidak Normal)' if ks_pval < 0.05 else 'Gagal Tolak H0 (Normal)',
+                          'Tolak H0 (Ada Autokorelasi)' if lb_pval < 0.05 else 'Gagal Tolak H0 (Tidak Ada Autokorelasi)']
+        })
+
+        return result, residuals
+
     if model_choice == "MAR-Normal":
         st.markdown("##### Model: **MAR-Normal**")
-
         df_sig = test_significance_mar(model)
-
-        st.dataframe(df_sig.style.format({"Estimate": "{:.4f}", "Std.Err": "{:.4f}", 
-                                          "z-value": "{:.4f}", "p-value": "{:.4f}"}))
-
-    elif model_choice == "MAR-GED":
+        st.dataframe(df_sig.style.format({
+            "Estimate": "{:.4f}",
+            "Std.Err": "{:.4f}",
+            "z-value": "{:.4f}",
+            "p-value": "{:.4f}"
+        }))
+    else:
         st.markdown("##### Model: **MAR-GED**")
-
-        df_sig = test_significance_ar_params_mar(model['X'], model['y'], model['phi'], model['sigma'], model['tau'])
-
-        st.dataframe(df_sig.style.format({"Estimate": "{:.4f}", "Std Error": "{:.4f}", 
-                                          "z-value": "{:.4f}", "p-value": "{:.4f}"}))
+        df_sig = test_significance_ar_params_mar(
+            model['X'], model['y'], model['phi'], model['sigma'], model['tau'])
+        st.dataframe(df_sig.style.format({
+            "Estimate": "{:.4f}",
+            "Std Error": "{:.4f}",
+            "z-value": "{:.4f}",
+            "p-value": "{:.4f}"
+        }))
 
     st.markdown("""
     **Interpretasi:**  
@@ -482,52 +675,17 @@ elif menu == "Uji Signifikansi dan Residual":
     - p-value ≥ 0.05 → **Tidak signifikan**
     """)
 
-    # ------------------ DIAGNOSTIK RESIDUAL -------------------
     st.header("📊 Diagnostik Residual")
 
     if model_choice == "MAR-Normal":
         st.markdown("##### Residual (Komponen Dominan) - MAR-Normal")
-
         result_summary, residuals = test_residual_assumptions(model)
-
         st.dataframe(result_summary.style.format({"Statistic": "{:.4f}", "p-value": "{:.4f}"}))
-
-        # Plot residual waktu
-        st.markdown("#### 🕒 Plot Residual Waktu")
-        fig, ax = plt.subplots(figsize=(12,4))
-        ax.plot(residuals, label="Residual", color='purple')
-        ax.axhline(0, linestyle='--', color='gray')
-        ax.set_title("Plot Residual MAR-Normal (Komponen Dominan)")
-        st.pyplot(fig)
-
-        # Histogram
-        st.markdown("#### 🔍 Histogram Residual")
-        fig, ax = plt.subplots(figsize=(8,4))
-        sns.histplot(residuals, kde=True, bins=30, color='skyblue', ax=ax)
-        ax.set_title("Distribusi Residual MAR-Normal")
-        st.pyplot(fig)
-
-    elif model_choice == "MAR-GED":
+    else:
         st.markdown("##### Residual (Komponen Dominan) - MAR-GED")
-
         result_summary, residuals = test_residual_assumptions_mar(model)
-
         st.dataframe(result_summary.style.format({"Statistic": "{:.4f}", "p-value": "{:.4f}"}))
 
-        # Plot residual waktu
-        st.markdown("#### 🕒 Plot Residual Waktu")
-        fig, ax = plt.subplots(figsize=(12,4))
-        ax.plot(residuals, label="Residual", color='darkgreen')
-        ax.axhline(0, linestyle='--', color='gray')
-        ax.set_title("Plot Residual MAR-GED (Komponen Dominan)")
-        st.pyplot(fig)
-
-        # Histogram
-        st.markdown("#### 🔍 Histogram Residual")
-        fig, ax = plt.subplots(figsize=(8,4))
-        sns.histplot(residuals, kde=True, bins=30, color='lightgreen', ax=ax)
-        ax.set_title("Distribusi Residual MAR-GED")
-        st.pyplot(fig)
 
 # ============================ HALAMAN PREDIKSI DAN VISUALISASI ============================
 
