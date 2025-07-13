@@ -168,50 +168,62 @@ elif menu == "Data Preprocessing":
     st.title("⚙️ Preprocessing Data")
 
     if 'df' not in st.session_state or 'harga_col' not in st.session_state:
-        st.warning("Upload data terlebih dahulu.")
+        st.warning("Upload data terlebih dahulu di menu Input Data.")
         st.stop()
 
     df = st.session_state['df'].copy()
     harga_col = st.session_state['harga_col']
 
-    # Fungsi format ke rupiah Indonesia (29.153,00)
+    # --- Format harga ke Rupiah ---
     def format_harga_idr(x):
-        return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"Rp {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-    # Bersihkan kolom harga (jika masih format "29.153,00" → float)
-    def clean_price_column(series):
-        return series.astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
+    df['Harga Angka'] = df[harga_col]  # simpan harga numerik untuk perhitungan
+    df['Harga Format Rupiah'] = df['Harga Angka'].apply(format_harga_idr)
 
-    # Bersihkan dan hitung log return
-    df[harga_col] = clean_price_column(df[harga_col])
-    df['Harga'] = df[harga_col].apply(format_harga_idr)
-
-    # Hitung log return
-    df['Log Return'] = np.log(df[harga_col] / df[harga_col].shift(1))
+    # --- Hitung Log Return ---
+    df['Log Return'] = np.log(df['Harga Angka'] / df['Harga Angka'].shift(1))
     df = df.dropna().reset_index(drop=True)
 
-    # Tampilkan tabel 5 baris pertama
-    st.markdown("### Tabel 5 Baris Pertama")
-    st.dataframe(df[['Date', 'Harga', 'Log Return']].head())
+    # --- Tampilkan 5 data pertama ---
+    st.markdown("### 📋 Tabel 5 Data Pertama")
+    st.dataframe(df[['Date', 'Harga Format Rupiah', 'Log Return']].head())
 
-    # ----------------- Split Data -----------------
-    st.markdown("### Split Data (Train/Test)")
+    # --- Split Data Train/Test ---
+    st.markdown("### ✂️ Split Data (Train/Test)")
     n_test = 30
     train, test = df[:-n_test], df[-n_test:]
+
     st.session_state['log_return_train'] = train['Log Return']
     st.session_state['train'] = train
     st.session_state['test'] = test
 
-    # Visualisasi
-    st.markdown("#### Visualisasi Log Return (Train vs Test)")
+    # --- Visualisasi Log Return Split ---
+    st.markdown("#### Visualisasi Log Return (Train/Test)")
     fig, ax = plt.subplots(figsize=(12,4))
     ax.plot(train['Date'], train['Log Return'], label='Train', color='blue')
-    ax.plot(test['Date'], test['Log Return'], label='Test', color='red')
+    ax.plot(test['Date'], test['Log Return'], label='Test', color='orange')
     ax.set_title("Log Return: Train vs Test Split")
     ax.set_xlabel("Tanggal")
     ax.set_ylabel("Log Return")
     ax.legend()
-    st.pyplot(fig
+    st.pyplot(fig)
+
+    # --- Uji Stasioneritas ADF ---
+    st.markdown("### 🧪 Uji Stasioneritas ADF")
+
+    from statsmodels.tsa.stattools import adfuller
+
+    def adf_test(series, name):
+        result = adfuller(series)
+        st.write(f'**ADF Test untuk {name}:**')
+        st.write(f'- ADF Statistic : {result[0]:.4f}')
+        st.write(f'- p-value       : {result[1]:.4f}')
+        st.write(f'- Stationary?   : {"✅ Ya" if result[1] < 0.05 else "⚠️ Tidak"}')
+        st.write("---")
+
+    adf_test(train['Log Return'], harga_col)
+
     
 # ----------------- Halaman Uji Stasioneritas -----------------
 elif menu == "Stasioneritas":
