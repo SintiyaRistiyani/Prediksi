@@ -462,8 +462,6 @@ elif menu == "Uji Signifikansi dan Residual":
     # Fungsi uji signifikansi MAR-Normal
     def test_significance_mar(result):
         from scipy.stats import norm
-        import numpy as np
-        import pandas as pd
 
         phi = result['phi']         # (K x p)
         sigma = result['sigma']     # (K,)
@@ -621,8 +619,6 @@ elif menu == "Uji Signifikansi dan Residual":
     def test_residual_assumptions_mar(model, lags=10):
         from scipy.stats import kstest
         from statsmodels.stats.diagnostic import acorr_ljungbox
-        import numpy as np
-        import pandas as pd
 
         residuals = compute_residuals_mar(model)
         residuals_std = (residuals - np.mean(residuals)) / np.std(residuals)
@@ -687,7 +683,7 @@ elif menu == "Prediksi dan Visualisasi":
     st.header("🔮 Prediksi Harga Saham dengan Model MAR")
 
     # Validasi data dan model
-    required_keys = ['log_return_train', 'df', 'best_models', 'harga_col']
+    required_keys = ['log_return_train', 'df', 'best_model', 'harga_col']
     for key in required_keys:
         if key not in st.session_state:
             st.error(f"❌ Data '{key}' belum tersedia. Silakan lakukan input, preprocessing, dan estimasi model terlebih dahulu.")
@@ -695,17 +691,17 @@ elif menu == "Prediksi dan Visualisasi":
 
     log_return_train = st.session_state['log_return_train']
     df = st.session_state['df']
-    best_models = st.session_state['best_models']
+    best_model = st.session_state['best_model']
     harga_col = st.session_state['harga_col']
 
-    nama_saham = st.selectbox("📈 Pilih Saham untuk Diprediksi:", list(best_models.keys()))
+    nama_saham = st.selectbox("📈 Pilih Saham untuk Diprediksi:", list(best_model.keys()))
     n_steps = st.number_input("📅 Masukkan Jumlah Hari Prediksi:", min_value=1, max_value=90, value=30)
     show_as = st.radio("📊 Tampilkan Hasil Sebagai:", ['Log-Return', 'Harga'])
 
     if st.button("▶️ Prediksi"):
         # Ambil data historis log return saham terpilih
         X_init = log_return_train[nama_saham].dropna().values
-        model = best_models[nama_saham]
+        model = best_model[nama_saham]
         dist = model.get('dist', 'normal').lower()
 
         # Fungsi prediksi sesuai distribusi
