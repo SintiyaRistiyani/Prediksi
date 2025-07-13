@@ -668,31 +668,34 @@ elif menu == "Data Preprocessing":
     df = st.session_state['df'].copy()
     harga_col = st.session_state['harga_col']
 
-    # --- Format harga ke Rupiah ---
+    # Format harga ke Rupiah
     def format_harga_idr(x):
         return f"Rp {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-    df['Harga Angka'] = df[harga_col]  # simpan harga numerik untuk perhitungan
+    df['Harga Angka'] = df[harga_col]
     df['Harga Format Rupiah'] = df['Harga Angka'].apply(format_harga_idr)
 
-    # --- Hitung Log Return ---
+    # Hitung Log Return
     df['Log Return'] = np.log(df['Harga Angka'] / df['Harga Angka'].shift(1))
     df = df.dropna().reset_index(drop=True)
 
-    # --- Tampilkan 5 data pertama ---
-    st.markdown("### 📋 Tabel 5 Data Pertama")
-    st.dataframe(df[['Date', 'Harga Format Rupiah', 'Log Return']].head())
-
-    # --- Split Data Train/Test ---
-    st.markdown("### ✂️ Split Data (Train/Test)")
+    # Split Train/Test
     n_test = 30
     train, test = df[:-n_test], df[-n_test:]
 
-    st.session_state['log_return_train'] = train['Log Return']
+    # Simpan ke session_state
+    st.session_state['df'] = df
     st.session_state['train'] = train
     st.session_state['test'] = test
+    st.session_state['log_return_train'] = train[['Date', 'Log Return']]
+    st.session_state['log_return_test'] = test[['Date', 'Log Return']]
+    st.session_state['harga_col'] = harga_col
 
-    # --- Visualisasi Log Return Split ---
+    # Tampilkan 5 data pertama
+    st.markdown("### 📋 Tabel 5 Data Pertama")
+    st.dataframe(df[['Date', 'Harga Format Rupiah', 'Log Return']].head())
+
+    # Visualisasi Train/Test
     st.markdown("#### Visualisasi Log Return (Train/Test)")
     fig, ax = plt.subplots(figsize=(12,4))
     ax.plot(train['Date'], train['Log Return'], label='Train', color='blue')
@@ -732,7 +735,12 @@ elif menu == "Stasioneritas":
         st.write(f'- Stationary?   : {"✅ Ya" if result[1] < 0.05 else "⚠️ Tidak"}')
         st.write("---")
 
+    #  ADF Test
     adf_test(train['Log Return'], harga_col)
+
+    # Simpan hasil diagnostik (optional, jika ingin dipakai di halaman lain)
+    st.session_state['skewness'] = skew(train['Log Return'])
+    st.session_state['kurtosis'] = kurtosis(train['Log Return'])
     
     # === Plot ACF & PACF ===
     st.markdown("### 🔁 ACF dan PACF Plot")
@@ -760,6 +768,8 @@ elif menu == "Stasioneritas":
     ax.set_ylabel('Frekuensi')
     st.pyplot(fig)
 
+
+# ==================================== HALAMAN MODEL =======================================================
 elif menu == "Model":
 
     st.title("🏗️ Pemodelan Mixture Autoregressive (MAR)")
@@ -834,8 +844,13 @@ elif menu == "Model":
             st.session_state['best_k'] = best_model['K']
             st.session_state['best_p'] = p_input
 
+            # Jika multi saham, bisa buat dict
+            if 'best_models' not in st.session_state:
+                st.session_state['best_models'] = {}
 
-# =================== UJI SIGNIFIKANDI DAN RESIDUAL===========================
+            st.session_state['best_models']['Saham'] = best_model  # atau ganti 'Saham' dengan nama kolom jika multi
+
+# ============================== UJI SIGNIFIKANDI DAN RESIDUAL===================================================
 elif menu == "Uji Signifikansi dan Residual":
 
     st.title("🧪 Uji Signifikansi Parameter & Diagnostik Residual")
