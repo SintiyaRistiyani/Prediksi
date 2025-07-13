@@ -954,15 +954,15 @@ def compute_price_metrics(actual, pred):
 # ---------------------------
 # Halaman Prediksi
 elif menu == "Prediksi dan Visualisasi":
-st.header("🔮 Prediksi Harga & Visualisasi")
+    st.header("🔮 Prediksi Harga & Visualisasi")
 
-nama_saham = st.selectbox("Pilih Saham", list(log_return_train.columns))
+    nama_saham = st.selectbox("Pilih Saham", list(log_return_train.columns))
 
-mode_prediksi = st.radio("Pilih Mode Prediksi", ['Out-of-Sample', 'Forecast Masa Depan'])
-show_as = st.radio("Tampilkan Dalam", ['Log-Return', 'Harga'])
+    mode_prediksi = st.radio("Pilih Mode Prediksi", ['Out-of-Sample', 'Forecast Masa Depan'])
+    show_as = st.radio("Tampilkan Dalam", ['Log-Return', 'Harga'])
 
-model = best_models[nama_saham]
-data_train_saham = log_return_train[nama_saham].dropna().values
+    model = best_models[nama_saham]
+    data_train_saham = log_return_train[nama_saham].dropna().values
 
 if mode_prediksi == 'Out-of-Sample':
     st.subheader(f"📈 Out-of-Sample Prediction: {nama_saham}")
