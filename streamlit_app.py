@@ -12,6 +12,11 @@ from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.stattools import adfuller
 from sklearn.metrics import mean_absolute_percentage_error
 from scipy.stats import skew, kurtosis, shapiro, jarque_bera
+from scipy.stats import norm
+from numpy.linalg import LinAlgError
+from scipy.stats import gennorm
+from scipy.optimize import minimize
+
 
 
 # Utility
@@ -78,6 +83,101 @@ def diag_residual(resid):
 
 
 # Untuk MAR-Normal
+def em_mar_normal_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
+    """
+    EM Algorithm untuk MAR-Normal
+    """
+    np.random.seed(seed)
+    n = len(series)
+    y = series[p:]
+    X = np.column_stack([series[p - i - 1: n - i - 1] for i in range(p)])
+    T_eff = len(y)
+
+    phi = np.random.randn(K, p) * 0.1
+    sigma = np.random.rand(K) * 0.05 + 1e-3
+    pi = np.ones(K) / K
+    ll_old = -np.inf
+
+    for iteration in range(max_iter):
+        # E-Step
+        log_tau = np.zeros((T_eff, K))
+        for k in range(K):
+            mu_k = X @ phi[k]
+            log_pdf = norm.logpdf(y, loc=mu_k, scale=np.maximum(sigma[k], 1e-6))
+            log_tau[:, k] = np.log(np.maximum(pi[k], 1e-8)) + log_pdf
+
+        log_tau_max = np.max(log_tau, axis=1, keepdims=True)
+        tau = np.exp(log_tau - log_tau_max)
+        tau /= tau.sum(axis=1, keepdims=True)
+
+        # M-Step
+        for k in range(K):
+            w = tau[:, k]
+            W = np.diag(w)
+            XtWX = X.T @ W @ X
+            XtWy = X.T @ (w * y)
+            try:
+                XtWX += 1e-6 * np.eye(p)
+                phi[k] = np.linalg.solve(XtWX, XtWy)
+            except LinAlgError:
+                phi[k] = np.linalg.lstsq(XtWX, XtWy, rcond=None)[0]
+
+            mu_k = X @ phi[k]
+            resid = y - mu_k
+            sigma[k] = max(np.sqrt(np.sum(w * resid**2) / np.sum(w)), 1e-6)
+
+        pi = tau.mean(axis=0)
+        pi = np.maximum(pi, 1e-8)
+        pi /= pi.sum()
+
+        ll_new = np.sum(np.log(np.sum(np.exp(log_tau - log_tau_max), axis=1)) + log_tau_max.flatten())
+
+        if np.abs(ll_new - ll_old) < tol:
+            break
+        ll_old = ll_new
+
+    # Hitung jumlah parameter untuk AIC/BIC
+    num_params = K * (p + 1) + (K - 1)  # phi, sigma, pi
+    aic = -2 * ll_new + 2 * num_params
+    bic = -2 * ll_new + np.log(T_eff) * num_params
+
+    return {
+        'K': K,
+        'phi': phi,
+        'sigma': sigma,
+        'pi': pi,
+        'loglik': ll_new,
+        'AIC': aic,
+        'BIC': bic,
+        'tau': tau,
+        'X': X,
+        'y': y
+    }
+
+# MAR-Normal
+def find_best_K(series, p, K_range, max_iter=100, tol=1e-6):
+    """
+    Cari jumlah komponen K terbaik untuk MAR-Normal berdasarkan BIC
+    """
+    results = []
+    for K in K_range:
+        print(f"🔄 Estimasi MAR-Normal untuk K={K}...")
+        model = em_mar_normal_manual(series, p, K, max_iter, tol)
+        results.append(model)
+
+    best_model = min(results, key=lambda x: x['BIC'])
+    print(f"✅ Model terbaik: K={best_model['K']} (BIC={best_model['BIC']:.2f})")
+
+    df_bic = pd.DataFrame({
+        'K': [m['K'] for m in results],
+        'LogLik': [m['loglik'] for m in results],
+        'AIC': [m['AIC'] for m in results],
+        'BIC': [m['BIC'] for m in results]
+    })
+
+    return best_model, df_bic
+
+
 def find_best_K(series, p, K_range, max_iter=100, tol=1e-6):
     results = []
     for K in K_range:
@@ -92,12 +192,6 @@ def find_best_K(series, p, K_range, max_iter=100, tol=1e-6):
     })
     return best_model, df_bic
 
-# === IMPORT LIBRARY ===
-import numpy as np
-import pandas as pd
-from scipy.stats import gennorm
-from scipy.optimize import minimize
-from numpy.linalg import LinAlgError
 
 # === ESTIMASI BETA GED ===
 def estimate_beta(residuals, weights, sigma_init=1.0):
