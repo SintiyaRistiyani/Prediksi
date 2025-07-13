@@ -247,10 +247,10 @@ axes[1].set_title("PACF")
 st.pyplot(fig)
 
         
-    skw = skew(train['Log Return'])
-    krt = kurtosis(train['Log Return'])
-    st.write(f"**Skewness:** {skw:.4f}")
-    st.write(f"**Kurtosis:** {krt:.4f}")
+skw = skew(train['Log Return'])
+krt = kurtosis(train['Log Return'])
+st.write(f"**Skewness:** {skw:.4f}")
+st.write(f"**Kurtosis:** {krt:.4f}")
 
     
 # Visualisasi histogram + KDE
