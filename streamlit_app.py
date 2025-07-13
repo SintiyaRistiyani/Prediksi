@@ -89,6 +89,29 @@ def em_mar_normal_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
         'tau': tau, 'X': X, 'y': y, 'dist': 'normal'
     }
 
+# MAR-Normal
+def find_best_K(series, p, K_range, max_iter=100, tol=1e-6):
+    """
+    Cari jumlah komponen K terbaik untuk MAR-Normal berdasarkan BIC
+    """
+    results = []
+    for K in K_range:
+        print(f"🔄 Estimasi MAR-Normal untuk K={K}...")
+        model = em_mar_normal_manual(series, p, K, max_iter, tol)
+        results.append(model)
+
+    best_model = min(results, key=lambda x: x['BIC'])
+    print(f"✅ Model terbaik: K={best_model['K']} (BIC={best_model['BIC']:.2f})")
+
+    df_bic = pd.DataFrame({
+        'K': [m['K'] for m in results],
+        'LogLik': [m['loglik'] for m in results],
+        'AIC': [m['AIC'] for m in results],
+        'BIC': [m['BIC'] for m in results]
+    })
+
+    return best_model, df_bic
+
 # ================== FUNGSI EM MAR-GED ==================
 def estimate_beta(residuals, weights, sigma_init=1.0):
     def neg_log_likelihood(beta):
