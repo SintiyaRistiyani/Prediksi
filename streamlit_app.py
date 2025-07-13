@@ -690,12 +690,18 @@ elif menu == "Prediksi dan Visualisasi":
             st.error(f"❌ Data '{key}' belum tersedia. Silakan lakukan input, preprocessing, dan estimasi model terlebih dahulu.")
             st.stop()
 
-    log_return_train = st.session_state['log_return_train']  # DataFrame log-return dengan kolom saham
-    df = st.session_state['df']
-    best_model = st.session_state['best_model']  # dict: model terbaik per saham
-    harga_col = st.session_state['harga_col']    # Nama saham yang dipilih di halaman Input Data
+            log_return_train = st.session_state['log_return_train']
+            df = st.session_state['df']
+            best_model = st.session_state['best_model']
+            harga_col = st.session_state['harga_col']
 
-    st.markdown(f"📌 **Saham yang Dipilih:** {harga_col}")
+            st.markdown(f"📌 **Saham yang Dipilih:** {harga_col}")
+
+            # Karena log_return_train hanya ada 'Date' dan 'Log Return', gunakan kolom 'Log Return' saja
+            matched_col = 'Log Return'
+
+            n_steps = st.number_input("📅 Masukkan Jumlah Hari Prediksi:", min_value=1, max_value=90, value=30)
+            show_as = st.radio("📊 Tampilkan Hasil Sebagai:", ['Log-Return', 'Harga'])
 
     # Fungsi prediksi MAR-Normal (komponen dominan)
     def predict_mar_normal(model, X_init, n_steps=30):
