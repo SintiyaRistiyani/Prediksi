@@ -154,37 +154,89 @@ def em_mar_normal_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
     }
 
 # MAR-NORMAL
-def test_significance_mar(model):
-    """
-    Uji signifikansi parameter AR untuk MAR-Normal menggunakan pendekatan normal.
-    """
-    phi   = model['phi']
-    sigma = model['sigma']
-    X     = model['X']
-    T_eff = X.shape[0]
-    p     = phi.shape[1]
+from scipy.stats import norm
+import numpy as np
+import pandas as pd
 
-    se_phi = []
-    for k in range(model['K']):
-        XtX_inv = np.linalg.inv(X.T @ X + 1e-6*np.eye(p))  # Regularization
-        se = np.sqrt(sigma[k]**2 * np.diag(XtX_inv))
-        se_phi.append(se)
+def test_significance_mar(result):
+    """
+    Uji signifikansi parameter MAR-Normal (phi, sigma, pi)
+    """
+    phi = result['phi']         # (K x p)
+    sigma = result['sigma']     # (K,)
+    pi = result['pi']           # (K,)
+    tau = result['tau']         # (T x K)
+    X = result['X']             # (T x p)
+    y = result['y']             # (T,)
 
-    rows = []
-    for k in range(model['K']):
+    K, p = phi.shape
+    T_eff = len(y)
+
+    sig_results = []
+
+    for k in range(K):
+        r_k = tau[:, k]
+        W = np.diag(r_k)
+
+        # --- Covariance phi ---
+        try:
+            XtWX = X.T @ W @ X
+            XtWX += 1e-6 * np.eye(p)  # regularisasi numerik agar stabil
+            cov_phi = sigma[k]**2 * np.linalg.inv(XtWX)
+            se_phi = np.sqrt(np.diag(cov_phi))
+        except np.linalg.LinAlgError:
+            se_phi = np.full(p, np.nan)
+
+        # --- Z-test untuk phi ---
+        z_phi = phi[k] / se_phi
+        pval_phi = 2 * (1 - norm.cdf(np.abs(z_phi)))
+
+        # --- Standard error sigma ---
+        se_sigma = sigma[k] / np.sqrt(2 * np.sum(r_k))
+        z_sigma = sigma[k] / se_sigma
+        pval_sigma = 2 * (1 - norm.cdf(np.abs(z_sigma)))
+
+        # --- Standard error pi ---
+        se_pi = np.sqrt(pi[k] * (1 - pi[k]) / T_eff)
+        z_pi = pi[k] / se_pi
+        pval_pi = 2 * (1 - norm.cdf(np.abs(z_pi)))
+
+        # --- Simpan hasil untuk phi ---
         for j in range(p):
-            z_value = phi[k, j] / se_phi[k][j]
-            p_value = 2 * (1 - norm.cdf(np.abs(z_value)))
-            rows.append({
-                "Komponen": k+1,
-                "Phi_j": f"phi{j+1}",
-                "Estimate": phi[k, j],
-                "Std.Err": se_phi[k][j],
-                "z-value": z_value,
-                "p-value": p_value
+            sig_results.append({
+                'Komponen': k + 1,
+                'Parameter': f'phi_{j+1}',
+                'Estimate': phi[k, j],
+                'Std.Err': se_phi[j],
+                'z-value': z_phi[j],
+                'p-value': pval_phi[j],
+                'Signifikan': '✅' if pval_phi[j] < 0.05 else '❌'
             })
 
-    return pd.DataFrame(rows)
+        # --- Simpan hasil untuk sigma ---
+        sig_results.append({
+            'Komponen': k + 1,
+            'Parameter': 'sigma',
+            'Estimate': sigma[k],
+            'Std.Err': se_sigma,
+            'z-value': z_sigma,
+            'p-value': pval_sigma,
+            'Signifikan': '✅' if pval_sigma < 0.05 else '❌'
+        })
+
+        # --- Simpan hasil untuk pi ---
+        sig_results.append({
+            'Komponen': k + 1,
+            'Parameter': 'pi',
+            'Estimate': pi[k],
+            'Std.Err': se_pi,
+            'z-value': z_pi,
+            'p-value': pval_pi,
+            'Signifikan': '✅' if pval_pi < 0.05 else '❌'
+        })
+
+    return pd.DataFrame(sig_results)
+
 
 # MAR-Normal
 def find_best_K(series, p, K_range, max_iter=100, tol=1e-6):
@@ -324,37 +376,42 @@ def find_best_K_mar_ged(series, p, K_range, max_iter=100, tol=1e-6):
     })
 # Signifikan
 from scipy.stats import norm
+import numpy as np
 import pandas as pd
 
-def test_significance_ar_params_mar(X, y, phi, sigma, tau):
+def test_significance_ar_params_mar_ged(X, y, phi, sigma, beta, tau):
     """
-    Uji signifikansi parameter AR untuk model MAR (Normal atau GED)
+    Uji signifikansi parameter AR untuk model MAR-GED (phi, sigma, beta).
+    Hanya untuk phi di fungsi ini, sigma dan beta bisa dibuat terpisah jika perlu.
     """
     K, p = phi.shape
     T = len(y)
     result = []
 
     for k in range(K):
-        idx_k = tau[:, k] > 1e-3  # Gunakan hanya jika komponen ini aktif
+        idx_k = tau[:, k] > 1e-3  # hanya gunakan data yang signifikan di komponen k
+
         for j in range(p):
             Xj = X[:, j]
             nom = phi[k, j]
             denom = np.sum(tau[:, k] * Xj**2)
             if denom > 0:
+                # Standard error memperhitungkan scale dari GED
                 se = np.sqrt(sigma[k]**2 / denom)
                 z = nom / se
                 p_value = 2 * (1 - norm.cdf(np.abs(z)))
                 result.append({
                     'Komponen': k+1,
-                    'AR Index': f'phi_{j+1}',
+                    'Parameter': f'phi_{j+1}',
                     'Estimate': nom,
-                    'Std Error': se,
+                    'Std.Error': se,
                     'z-value': z,
                     'p-value': p_value,
                     'Signifikan': '✅' if p_value < 0.05 else '❌'
                 })
 
     return pd.DataFrame(result)
+    
     
 # Residual
 from scipy.stats import kstest, norm, gennorm
