@@ -154,6 +154,40 @@ def em_mar_normal_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
         'y': y
     }
 
+# MAR-NORMAL
+def test_significance_mar(model):
+    """
+    Uji signifikansi parameter AR untuk MAR-Normal menggunakan pendekatan normal.
+    """
+    phi   = model['phi']
+    sigma = model['sigma']
+    X     = model['X']
+    T_eff = X.shape[0]
+    p     = phi.shape[1]
+
+    se_phi = []
+    for k in range(model['K']):
+        XtX_inv = np.linalg.inv(X.T @ X + 1e-6*np.eye(p))  # Regularization
+        se = np.sqrt(sigma[k]**2 * np.diag(XtX_inv))
+        se_phi.append(se)
+
+    rows = []
+    for k in range(model['K']):
+        for j in range(p):
+            z_value = phi[k, j] / se_phi[k][j]
+            p_value = 2 * (1 - norm.cdf(np.abs(z_value)))
+            rows.append({
+                "Komponen": k+1,
+                "Phi_j": f"phi{j+1}",
+                "Estimate": phi[k, j],
+                "Std.Err": se_phi[k][j],
+                "z-value": z_value,
+                "p-value": p_value
+            })
+
+    return pd.DataFrame(rows)
+
+
 # MAR-Normal
 def find_best_K(series, p, K_range, max_iter=100, tol=1e-6):
     """
