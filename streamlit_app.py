@@ -462,4 +462,86 @@ elif menu == "Model":
             st.session_state['best_p'] = p_input
 
 
-# =================== PREDIKSI DAN VISUALISASI===========================
+# =================== UJI SIGNIFIKANDI DAN RESIDUAL===========================
+elif menu == "Uji Signifikansi dan Residual":
+
+    st.title("🧪 Uji Signifikansi Parameter & Diagnostik Residual")
+
+    if 'best_model' not in st.session_state:
+        st.warning("Lakukan pemodelan terlebih dahulu di menu 'Model'.")
+        st.stop()
+
+    model = st.session_state['best_model']
+    model_choice = st.session_state['model_choice']
+
+    st.header("📌 Uji Signifikansi Parameter")
+
+    if model_choice == "MAR-Normal":
+        st.markdown("##### Model: **MAR-Normal**")
+
+        df_sig = test_significance_mar(model)
+
+        st.dataframe(df_sig.style.format({"Estimate": "{:.4f}", "Std.Err": "{:.4f}", 
+                                          "z-value": "{:.4f}", "p-value": "{:.4f}"}))
+
+    elif model_choice == "MAR-GED":
+        st.markdown("##### Model: **MAR-GED**")
+
+        df_sig = test_significance_ar_params_mar(model['X'], model['y'], model['phi'], model['sigma'], model['tau'])
+
+        st.dataframe(df_sig.style.format({"Estimate": "{:.4f}", "Std Error": "{:.4f}", 
+                                          "z-value": "{:.4f}", "p-value": "{:.4f}"}))
+
+    st.markdown("""
+    **Interpretasi:**  
+    - p-value < 0.05 → **Signifikan**  
+    - p-value ≥ 0.05 → **Tidak signifikan**
+    """)
+
+    # ------------------ DIAGNOSTIK RESIDUAL -------------------
+    st.header("📊 Diagnostik Residual")
+
+    if model_choice == "MAR-Normal":
+        st.markdown("##### Residual (Komponen Dominan) - MAR-Normal")
+
+        result_summary, residuals = test_residual_assumptions(model)
+
+        st.dataframe(result_summary.style.format({"Statistic": "{:.4f}", "p-value": "{:.4f}"}))
+
+        # Plot residual waktu
+        st.markdown("#### 🕒 Plot Residual Waktu")
+        fig, ax = plt.subplots(figsize=(12,4))
+        ax.plot(residuals, label="Residual", color='purple')
+        ax.axhline(0, linestyle='--', color='gray')
+        ax.set_title("Plot Residual MAR-Normal (Komponen Dominan)")
+        st.pyplot(fig)
+
+        # Histogram
+        st.markdown("#### 🔍 Histogram Residual")
+        fig, ax = plt.subplots(figsize=(8,4))
+        sns.histplot(residuals, kde=True, bins=30, color='skyblue', ax=ax)
+        ax.set_title("Distribusi Residual MAR-Normal")
+        st.pyplot(fig)
+
+    elif model_choice == "MAR-GED":
+        st.markdown("##### Residual (Komponen Dominan) - MAR-GED")
+
+        result_summary, residuals = test_residual_assumptions_mar(model)
+
+        st.dataframe(result_summary.style.format({"Statistic": "{:.4f}", "p-value": "{:.4f}"}))
+
+        # Plot residual waktu
+        st.markdown("#### 🕒 Plot Residual Waktu")
+        fig, ax = plt.subplots(figsize=(12,4))
+        ax.plot(residuals, label="Residual", color='darkgreen')
+        ax.axhline(0, linestyle='--', color='gray')
+        ax.set_title("Plot Residual MAR-GED (Komponen Dominan)")
+        st.pyplot(fig)
+
+        # Histogram
+        st.markdown("#### 🔍 Histogram Residual")
+        fig, ax = plt.subplots(figsize=(8,4))
+        sns.histplot(residuals, kde=True, bins=30, color='lightgreen', ax=ax)
+        ax.set_title("Distribusi Residual MAR-GED")
+        st.pyplot(fig)
+
