@@ -701,7 +701,11 @@ elif menu == "Prediksi dan Visualisasi":
 
     if st.button("▶️ Prediksi"):
         # Ambil data historis log return saham terpilih
-        X_init = log_return_train[harga_col].dropna().values
+        if harga_col in log_return_train.columns:
+            X_init = log_return_train[harga_col].dropna().values
+        else:
+            X_init = log_return_train.iloc[:, 0].dropna().values  # fallback ambil kolom pertama
+
         model = best_model  # Tidak pakai [harga_col] karena best_model sudah untuk 1 saham
         dist = model.get('dist', 'normal').lower()
 
