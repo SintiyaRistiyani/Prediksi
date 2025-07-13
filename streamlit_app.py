@@ -77,6 +77,38 @@ def diag_residual(resid):
     st.write("Ljung‑Box test:")
     st.dataframe(lb.round(4))
 
+
+# Untuk MAR-Normal
+def find_best_K(series, p, K_range, max_iter=100, tol=1e-6):
+    results = []
+    for K in K_range:
+        model = em_mar_normal_manual(series, p, K, max_iter, tol)
+        results.append(model)
+    best_model = min(results, key=lambda x: x['BIC'])
+    df_bic = pd.DataFrame({
+        'K': [m['K'] for m in results],
+        'LogLik': [m['loglik'] for m in results],
+        'AIC': [m['AIC'] for m in results],
+        'BIC': [m['BIC'] for m in results]
+    })
+    return best_model, df_bic
+
+# Untuk MAR-GED
+def find_best_K_mar_ged(series, p, K_range, max_iter=100, tol=1e-6):
+    results = []
+    for K in K_range:
+        model = em_mar_ged_manual(series, p, K, max_iter=max_iter, tol=tol)
+        results.append(model)
+    best_model = min(results, key=lambda x: x['BIC'])
+    df_bic = pd.DataFrame({
+        'K': [m['K'] for m in results],
+        'LogLik': [m['loglik'] for m in results],
+        'AIC': [m['AIC'] for m in results],
+        'BIC': [m['BIC'] for m in results]
+    })
+    return best_model, df_bic
+
+
 def forecast_mar(model, series, n_steps):
     """
     Prediksi n_steps ke depan untuk MAR-Normal atau MAR-GED.
