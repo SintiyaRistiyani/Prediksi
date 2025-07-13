@@ -445,7 +445,7 @@ elif menu == "Model":
             else:
                 st.error("❌ Tidak ada model yang berhasil diestimasi.")
 
-
+# ======================================== UJI SIGNIFIKANSI DAN RESIDUAL =======================================
 elif menu == "Uji Signifikansi dan Residual":
 
     st.title("🧪 Uji Signifikansi Parameter & Diagnostik Residual")
@@ -682,7 +682,7 @@ elif menu == "Uji Signifikansi dan Residual":
         result_summary, residuals = test_residual_assumptions_mar(model)
         st.dataframe(result_summary.style.format({"Statistic": "{:.4f}", "p-value": "{:.4f}"}))
 
-
+# -------------------------------PREDIKSI DAN VISUALISASI ---------------------------------------------
 elif menu == "Prediksi dan Visualisasi":
     st.header("🔮 Prediksi Harga Saham dengan Model MAR")
 
