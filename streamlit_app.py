@@ -450,7 +450,7 @@ elif menu == "Model":
                 st.success(f"✅ Model MAR-GED terbaik: K={best_model['K']} (BIC={best_model['BIC']:.2f})")
 
                 st.markdown("### 📊 Tabel BIC (MAR-GED)")
-                st.dataframe(df_bic.style.format({"LogLik": "{:.2f}", "AIC": "{:.2f}", "BIC": "{:.2f}"}))
+                st.dataframe(df_bic.style.format(precision=2))
 
                 # Parameter output
                 phi = best_model['phi']
