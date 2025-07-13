@@ -694,15 +694,6 @@ elif menu == "Prediksi dan Visualisasi":
     best_model = st.session_state['best_model']  # Model untuk 1 saham (dict)
     harga_col = st.session_state['harga_col']    # Nama saham yang dipilih di halaman Input Data
 
-    st.markdown(f"📌 **Saham yang Dipilih:** {harga_col}")
-
-    log_return_train = st.session_state['log_return_train']
-    df = st.session_state['df']
-    best_model = st.session_state['best_model']
-    harga_col = st.session_state['harga_col']
-
-    st.markdown(f"📌 **Saham yang Dipilih:** {harga_col}")
-
     # Karena log_return_train hanya ada 'Date' dan 'Log Return', gunakan kolom 'Log Return' saja
     matched_col = 'Log Return'
 
