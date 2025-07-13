@@ -678,6 +678,7 @@ elif menu == "Uji Signifikansi dan Residual":
         result_summary, residuals = test_residual_assumptions_mar(model)
         st.dataframe(result_summary.style.format({"Statistic": "{:.4f}", "p-value": "{:.4f}"}))
 
+
 # ------------------------------- PREDIKSI DAN VISUALISASI ---------------------------------------------
 elif menu == "Prediksi dan Visualisasi":
     st.header("🔮 Prediksi Harga Saham dengan Model MAR")
@@ -716,7 +717,32 @@ elif menu == "Prediksi dan Visualisasi":
 
         return np.array(preds)
 
-    # Fungsi prediksi MAR-GED harus ditambahkan juga jika perlu (saya bisa bantu buatkan)
+    # Fungsi prediksi MAR-GED
+    def predict_mar_ged(model, X_init, n_steps=30, seed=42):
+        phi = model['phi']
+        pi = model['pi']
+        sigma = model['sigma']
+        beta = model['beta']
+        p = phi.shape[1]
+
+        main_comp = np.argmax(pi)
+        phi_main = phi[main_comp]
+        sigma_main = sigma[main_comp]
+        beta_main = beta[main_comp]
+
+        np.random.seed(seed)
+
+        preds = []
+        X_curr = list(X_init[-p:])
+
+        for _ in range(n_steps):
+            next_val = np.dot(phi_main, X_curr[-p:][::-1])
+            noise = gennorm.rvs(beta_main, loc=0, scale=sigma_main)
+            next_val += noise
+            preds.append(next_val)
+            X_curr.append(next_val)
+
+        return np.array(preds)
 
     # Sinkronisasi nama kolom (case insensitive)
     log_cols = [col.strip().upper() for col in log_return_train.columns]
@@ -737,8 +763,10 @@ elif menu == "Prediksi dan Visualisasi":
 
         if dist == 'normal':
             preds_log = predict_mar_normal(model, X_init, n_steps=n_steps)
+        elif dist == 'ged':
+            preds_log = predict_mar_ged(model, X_init, n_steps=n_steps)
         else:
-            st.error(f"❌ Distribusi model '{dist}' tidak dikenali atau fungsi prediksi belum tersedia.")
+            st.error(f"❌ Distribusi model '{dist}' tidak dikenali.")
             st.stop()
 
         st.success(f"✅ Prediksi {n_steps} hari ke depan untuk {harga_col} selesai.")
@@ -793,3 +821,4 @@ elif menu == "Prediksi dan Visualisasi":
             ax.set_ylabel("Log-Return")
             ax.legend()
             st.pyplot(fig)
+
