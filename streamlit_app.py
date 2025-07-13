@@ -41,7 +41,7 @@ def diagnostik_saham(series, nama_saham):
     if series is None or len(series) == 0:
         st.warning("Series log return kosong.")
         return
-# ===================== FUNGSI PENDUKUNG =====================
+# ===================== FUNGSI PENDUKUNG MAR NORMAL=====================
 def parameter_significance(model):
     """
     Hitung t‑stat & p‑value sederhana (normal approximation) 
@@ -80,7 +80,6 @@ def diag_residual(resid):
     lb = acorr_ljungbox(resid, lags=[10, 20], return_df=True)
     st.write("Ljung‑Box test:")
     st.dataframe(lb.round(4))
-
 
 # Untuk MAR-Normal
 def em_mar_normal_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
@@ -187,7 +186,6 @@ def test_significance_mar(model):
 
     return pd.DataFrame(rows)
 
-
 # MAR-Normal
 def find_best_K(series, p, K_range, max_iter=100, tol=1e-6):
     """
@@ -227,7 +225,7 @@ def find_best_K(series, p, K_range, max_iter=100, tol=1e-6):
     return best_model, df_bic
 
 
-# === ESTIMASI BETA GED ===
+# ==================== FUNGSI PENDUKUNG MAR GED ==================================
 def estimate_beta(residuals, weights, sigma_init=1.0):
     def neg_log_likelihood(beta):
         if beta <= 0:
@@ -371,8 +369,67 @@ menu = st.sidebar.radio("Pilih Halaman:", (
     "Prediksi dan Visualisasi", 
     "Interpretasi dan Saran"
 ))
+#======== PENDUKUNG ===================
+from scipy.stats import kstest, norm
+from statsmodels.stats.diagnostic import acorr_ljungbox
+import numpy as np
+import pandas as pd
 
-# ----------------- Halaman Home -----------------
+def compute_mar_residuals(result):
+    """
+    Hitung residual MAR-Normal berdasarkan komponen dominan tiap waktu t.
+    """
+    tau = result['tau']         # (T x K)
+    X = result['X']             # (T x p)
+    y = result['y']             # (T,)
+    phi = result['phi']         # (K x p)
+
+    dominant_comp = np.argmax(tau, axis=1)
+    residuals = np.zeros(len(y))
+
+    for t in range(len(y)):
+        k = dominant_comp[t]
+        residuals[t] = y[t] - X[t] @ phi[k]
+
+    return residuals
+
+
+def test_residual_assumptions(result, lags=10, alpha=0.05):
+    """
+    Uji asumsi residual MAR-Normal:
+    - Normalitas (Kolmogorov-Smirnov)
+    - Autokorelasi (Ljung-Box)
+    """
+    residuals = compute_mar_residuals(result)
+    n = len(residuals)
+
+    # Normalisasi residual sebelum K–S
+    resid_std = (residuals - np.mean(residuals)) / np.std(residuals)
+
+    # --- Kolmogorov-Smirnov Test (Normalitas) ---
+    ks_stat, ks_pvalue = kstest(resid_std, 'norm')
+    ks_decision = 'Tolak H0 (Tidak Normal)' if ks_pvalue < alpha else 'Gagal Tolak H0 (Normal)'
+
+    # --- Ljung-Box Test (Autokorelasi) ---
+    lb_result = acorr_ljungbox(residuals, lags=lags, return_df=True)
+    lb_stat = lb_result['lb_stat'].values[-1]
+    lb_pvalue = lb_result['lb_pvalue'].values[-1]
+    lb_decision = 'Tolak H0 (Ada Autokorelasi)' if lb_pvalue < alpha else 'Gagal Tolak H0 (Tidak Ada Autokorelasi)'
+
+    # Buat tabel hasil
+    result_summary = pd.DataFrame({
+        'Test': ['Kolmogorov-Smirnov', 'Ljung-Box'],
+        'Statistic': [ks_stat, lb_stat],
+        'p-value': [ks_pvalue, lb_pvalue],
+        'Hipotesis Nol (H0)': ['Residual mengikuti distribusi normal', 'Tidak ada autokorelasi residual'],
+        'Keputusan': [ks_decision, lb_decision]
+    })
+
+    return result_summary, residuals
+
+
+
+# ---------------------------- Halaman Home ----------------------------------------------
 if menu == "Home":
     st.title("Aplikasi Prediksi Harga Saham Menggunakan Model Mixture Autoregressive (MAR)")
     st.markdown("""
