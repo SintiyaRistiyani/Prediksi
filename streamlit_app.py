@@ -694,49 +694,70 @@ elif menu == "Prediksi dan Visualisasi":
     best_model = st.session_state['best_model']  # Model untuk 1 saham (dict)
     harga_col = st.session_state['harga_col']    # Nama saham yang dipilih di halaman Input Data
 
-    # Karena log_return_train hanya ada 'Date' dan 'Log Return', gunakan kolom 'Log Return' saja
-    matched_col = 'Log Return'
+    st.markdown(f"📌 **Saham yang Dipilih:** {harga_col}")
+
+    # Fungsi prediksi MAR-Normal (ambil komponen dominan)
+    def predict_mar_normal(model, X_init, n_steps=30):
+        phi = model['phi']
+        pi = model['pi']
+        p = phi.shape[1]
+
+        main_k = np.argmax(pi)
+        phi_main = phi[main_k]
+
+        preds = []
+        X_curr = list(X_init[-p:])
+
+        for _ in range(n_steps):
+            x_lag = np.array(X_curr[-p:])[::-1]
+            next_val = np.dot(phi_main, x_lag)
+            preds.append(next_val)
+            X_curr.append(next_val)
+
+        return np.array(preds)
+
+    # Fungsi prediksi MAR-GED harus ditambahkan juga jika perlu (saya bisa bantu buatkan)
+
+    # Sinkronisasi nama kolom (case insensitive)
+    log_cols = [col.strip().upper() for col in log_return_train.columns]
+    harga_col_upper = harga_col.strip().upper()
+    if harga_col_upper in log_cols:
+        matched_col = log_return_train.columns[log_cols.index(harga_col_upper)]
+    else:
+        st.warning(f"⚠️ Kolom {harga_col} tidak ditemukan di log_return_train. Menggunakan kolom pertama.")
+        matched_col = log_return_train.columns[0]
 
     n_steps = st.number_input("📅 Masukkan Jumlah Hari Prediksi:", min_value=1, max_value=90, value=30)
     show_as = st.radio("📊 Tampilkan Hasil Sebagai:", ['Log-Return', 'Harga'])
 
-
-    # Fungsi konversi log-return ke harga (rekursif)
-    def convert_logreturn_to_price(last_price, logreturns):
-        prices = [last_price]
-        for r in logreturns:
-            prices.append(prices[-1] * np.exp(r))
-        return np.array(prices[1:])
-
     if st.button("▶️ Prediksi"):
-        # Ambil data historis log-return untuk saham yang sesuai
         X_init = log_return_train[matched_col].dropna().values
-
-        model = best_model  # Sudah untuk 1 saham
-
+        model = best_model
         dist = model.get('dist', 'normal').lower()
 
         if dist == 'normal':
             preds_log = predict_mar_normal(model, X_init, n_steps=n_steps)
-        elif dist == 'ged':
-            preds_log = predict_mar_ged(model, X_init, n_steps=n_steps)
         else:
-            st.error(f"❌ Distribusi model '{dist}' tidak dikenali.")
+            st.error(f"❌ Distribusi model '{dist}' tidak dikenali atau fungsi prediksi belum tersedia.")
             st.stop()
 
         st.success(f"✅ Prediksi {n_steps} hari ke depan untuk {harga_col} selesai.")
 
         if show_as == 'Harga':
-            # Ambil harga terakhir aktual dari df
             if harga_col in df.columns:
                 last_price = df.loc[df.index[-1], harga_col]
             else:
-                last_price = df.iloc[-1, 1]  # fallback ke kolom kedua (biasanya harga)
+                last_price = df.iloc[-1, 1]
                 st.warning(f"⚠️ Kolom {harga_col} tidak ditemukan di df. Menggunakan kolom kedua.")
+
+            def convert_logreturn_to_price(last_price, logreturns):
+                prices = [last_price]
+                for r in logreturns:
+                    prices.append(prices[-1] * np.exp(r))
+                return np.array(prices[1:])
 
             preds_price = convert_logreturn_to_price(last_price, preds_log)
 
-            # Tampilkan tabel harga prediksi
             df_pred = pd.DataFrame({
                 'Hari ke': np.arange(1, n_steps + 1),
                 'Harga Prediksi': preds_price
@@ -744,7 +765,6 @@ elif menu == "Prediksi dan Visualisasi":
             st.write(f"### 📋 Tabel Prediksi Harga Saham {harga_col}")
             st.dataframe(df_pred.style.format({"Harga Prediksi": "Rp {:,.2f}".format}))
 
-            # Plot harga historis + prediksi
             fig, ax = plt.subplots(figsize=(12, 5))
             harga_hist = df[harga_col].dropna() if harga_col in df.columns else df.iloc[:, 1].dropna()
             ax.plot(harga_hist.index, harga_hist.values, label='Harga Historis', color='blue')
@@ -757,7 +777,6 @@ elif menu == "Prediksi dan Visualisasi":
             st.pyplot(fig)
 
         else:  # show_as == 'Log-Return'
-            # Tampilkan tabel log-return prediksi
             df_pred = pd.DataFrame({
                 'Hari ke': np.arange(1, n_steps + 1),
                 'Log-Return Prediksi': preds_log
@@ -765,7 +784,6 @@ elif menu == "Prediksi dan Visualisasi":
             st.write(f"### 📋 Tabel Prediksi Log-Return Saham {harga_col}")
             st.dataframe(df_pred.style.format({"Log-Return Prediksi": "{:.6f}"}))
 
-            # Plot log-return historis + prediksi
             fig, ax = plt.subplots(figsize=(12, 5))
             ax.plot(np.arange(len(X_init)), X_init, label='Log-Return Historis', color='green')
             future_idx = np.arange(len(X_init), len(X_init) + n_steps)
