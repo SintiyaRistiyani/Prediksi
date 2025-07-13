@@ -202,11 +202,16 @@ elif menu == "Data Preprocessing":
     st.session_state['train'] = train
     st.session_state['test'] = test
 
-    # Visualisasi log return
-    st.line_chart({
-        'Train': train.set_index('Date')['Log Return'],
-        'Test': test.set_index('Date')['Log Return']
-    })
+    # Visualisasi
+    st.markdown("#### Visualisasi Log Return (Train vs Test)")
+    fig, ax = plt.subplots(figsize=(12,4))
+    ax.plot(train['Date'], train['Log Return'], label='Train', color='blue')
+    ax.plot(test['Date'], test['Log Return'], label='Test', color='red')
+    ax.set_title("Log Return: Train vs Test Split")
+    ax.set_xlabel("Tanggal")
+    ax.set_ylabel("Log Return")
+    ax.legend()
+    st.pyplot(fig
     
 # ----------------- Halaman Uji Stasioneritas -----------------
 elif menu == "Stasioneritas":
