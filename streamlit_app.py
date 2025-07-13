@@ -373,7 +373,7 @@ def find_best_K_mar_ged(series, p, K_range):
 
 
 # ==== HALAMAN MODEL ====
-def model_page():
+elif menu == "Model":
     st.title("🏗️ Pemodelan Mixture Autoregressive (MAR)")
 
     if 'log_return_train' not in st.session_state:
