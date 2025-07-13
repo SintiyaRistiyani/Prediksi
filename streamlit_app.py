@@ -683,7 +683,7 @@ elif menu == "Prediksi dan Visualisasi":
     st.header("🔮 Prediksi Harga Saham dengan Model MAR")
 
     # Validasi data dan model
-    required_keys = ['log_return_train', 'df', 'best_models', 'harga_col']
+    required_keys = ['log_return_train', 'df', 'best_model', 'harga_col']
     for key in required_keys:
         if key not in st.session_state:
             st.error(f"❌ Data '{key}' belum tersedia. Silakan lakukan input, preprocessing, dan estimasi model terlebih dahulu.")
@@ -691,7 +691,7 @@ elif menu == "Prediksi dan Visualisasi":
 
     log_return_train = st.session_state['log_return_train']
     df = st.session_state['df']
-    best_models = st.session_state['best_models']
+    best_model = st.session_state['best_model']
     harga_col = st.session_state['harga_col']  # Nama saham yang dipilih user di halaman Input Data
 
     st.markdown(f"📌 **Saham yang Dipilih:** {harga_col}")
@@ -702,7 +702,7 @@ elif menu == "Prediksi dan Visualisasi":
     if st.button("▶️ Prediksi"):
         # Ambil data historis log return saham terpilih
         X_init = log_return_train[harga_col].dropna().values
-        model = best_models[harga_col]
+        model = best_model  # Tidak pakai [harga_col] karena best_model sudah untuk 1 saham
         dist = model.get('dist', 'normal').lower()
 
         # Fungsi prediksi sesuai distribusi
