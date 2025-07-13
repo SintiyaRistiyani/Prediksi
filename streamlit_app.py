@@ -498,8 +498,13 @@ elif menu == "Uji Signifikansi dan Residual":
 
         df_sig = test_significance_mar(model)
 
-        st.dataframe(df_sig.style.format({"Estimate": "{:.4f}", "Std.Err": "{:.4f}", 
-                                          "z-value": "{:.4f}", "p-value": "{:.4f}"}))
+    st.table(df_sig.style.format({
+        "Estimate": "{:.4f}", 
+        "Std.Err": "{:.4f}", 
+        "z-value": "{:.4f}", 
+        "p-value": "{:.4f}"
+    }))
+
 
     elif model_choice == "MAR-GED":
         st.markdown("##### Model: **MAR-GED**")
