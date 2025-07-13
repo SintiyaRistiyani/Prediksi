@@ -79,24 +79,36 @@ def diag_residual(resid):
 
 def forecast_mar(model, series, n_steps):
     """
-    Prediksi n_steps ke depan untuk MAR‑Normal/GED sederhana.
-    Hasil: DataFrame [Tanggal, Prediksi, Aktual, Error]
+    Prediksi n_steps ke depan untuk MAR-Normal atau MAR-GED.
     """
-    series = series.dropna()
+    series = series.copy()
+    phi = model['phi']
+    pi = model['pi']
+    K = model['K']
+    p = phi.shape[1]
 
-    # Skewness & Kurtosis
-    skw = skew(series)
-    krt = kurtosis(series)
-    st.write(f"**Skewness:** {skw:.4f}")
-    st.write(f"**Kurtosis:** {krt:.4f}")
+    history = list(series[-p:])  # gunakan p terakhir untuk awal prediksi
+    preds = []
 
-    # Visualisasi histogram + KDE
-    fig, ax = plt.subplots(figsize=(10, 4))
-    sns.histplot(series, kde=True, bins=30, color='skyblue', ax=ax)
-    ax.set_title(f'Distribusi Log Return {nama_saham}')
-    ax.set_xlabel('Log Return')
-    ax.set_ylabel('Frekuensi')
-    st.pyplot(fig)
+    for _ in range(n_steps):
+        pred_per_komponen = []
+        for k in range(K):
+            ar_part = np.dot(phi[k], history[-p:][::-1])  # lag p dibalik urutannya
+            pred_per_komponen.append(pi[k] * ar_part)
+
+        pred_value = np.sum(pred_per_komponen)
+        preds.append(pred_value)
+        history.append(pred_value)
+
+    # Buat dataframe hasil
+    dates = pd.date_range(start=pd.to_datetime("today").normalize(), periods=n_steps+1, freq='D')[1:]
+    pred_df = pd.DataFrame({
+        "Tanggal": dates,
+        "Prediksi": preds,
+        "Aktual": [np.nan]*n_steps,
+        "Error": [np.nan]*n_steps
+    })
+    return pred_df
 
 # ----------------- Sidebar Navigasi -----------------
 st.sidebar.title("📊 Navigasi")
@@ -236,13 +248,13 @@ elif menu == "Stasioneritas":
     st.write(f"**Kurtosis:** {krt:.4f}")
 
     
-    # Visualisasi histogram + KDE
-    fig, ax = plt.subplots(figsize=(10, 4))
-    sns.histplot(series, kde=True, bins=30, color='skyblue', ax=ax)
-    ax.set_title(f'Distribusi Log Return {nama_saham}')
-    ax.set_xlabel('Log Return')
-    ax.set_ylabel('Frekuensi')
-    st.pyplot(fig)
+# Visualisasi histogram + KDE
+fig, ax = plt.subplots(figsize=(10, 4))
+sns.histplot(train['Log Return'], kde=True, bins=30, color='skyblue', ax=ax)
+ax.set_title(f'Distribusi Log Return {harga_col}')
+ax.set_xlabel('Log Return')
+ax.set_ylabel('Frekuensi')
+st.pyplot(fig)
 
 # ===================== MENU: Model =====================
 elif menu == "Model":
