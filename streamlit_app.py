@@ -690,14 +690,14 @@ elif menu == "Prediksi dan Visualisasi":
             st.error(f"❌ Data '{key}' belum tersedia. Silakan lakukan input, preprocessing, dan estimasi model terlebih dahulu.")
             st.stop()
 
-    log_return_train = st.session_state['log_return_train']
+    log_return_train = st.session_state['log_return_train']  # DataFrame log-return dengan kolom saham
     df = st.session_state['df']
-    best_model = st.session_state['best_model']  # Model untuk 1 saham (dict)
+    best_model = st.session_state['best_model']  # dict: model terbaik per saham
     harga_col = st.session_state['harga_col']    # Nama saham yang dipilih di halaman Input Data
 
     st.markdown(f"📌 **Saham yang Dipilih:** {harga_col}")
 
-    # Fungsi prediksi MAR-Normal (ambil komponen dominan)
+    # Fungsi prediksi MAR-Normal (komponen dominan)
     def predict_mar_normal(model, X_init, n_steps=30):
         phi = model['phi']
         pi = model['pi']
@@ -717,8 +717,10 @@ elif menu == "Prediksi dan Visualisasi":
 
         return np.array(preds)
 
-    # Fungsi prediksi MAR-GED
+    # Fungsi prediksi MAR-GED (jika ada)
     def predict_mar_ged(model, X_init, n_steps=30, seed=42):
+        from scipy.stats import gennorm
+
         phi = model['phi']
         pi = model['pi']
         sigma = model['sigma']
@@ -744,21 +746,36 @@ elif menu == "Prediksi dan Visualisasi":
 
         return np.array(preds)
 
-    # Sinkronisasi nama kolom (case insensitive)
-    log_cols = [col.strip().upper() for col in log_return_train.columns]
+    # Cari kolom saham di log_return_train (case-insensitive)
+    log_cols = [col.strip().upper() for col in log_return_train.columns if col != 'Date']
     harga_col_upper = harga_col.strip().upper()
+
     if harga_col_upper in log_cols:
         matched_col = log_return_train.columns[log_cols.index(harga_col_upper)]
     else:
-        st.warning(f"⚠️ Kolom {harga_col} tidak ditemukan di log_return_train. Menggunakan kolom pertama.")
-        matched_col = log_return_train.columns[0]
+        st.warning(f"⚠️ Kolom saham '{harga_col}' tidak ditemukan di log_return_train. Menggunakan kolom kedua (jika ada).")
+        # Asumsi kolom kedua selain 'Date'
+        all_cols = [col for col in log_return_train.columns if col != 'Date']
+        if len(all_cols) > 0:
+            matched_col = all_cols[0]
+        else:
+            st.error("Tidak ada kolom saham yang tersedia di log_return_train.")
+            st.stop()
 
     n_steps = st.number_input("📅 Masukkan Jumlah Hari Prediksi:", min_value=1, max_value=90, value=30)
     show_as = st.radio("📊 Tampilkan Hasil Sebagai:", ['Log-Return', 'Harga'])
 
     if st.button("▶️ Prediksi"):
+        # Ambil data log-return untuk saham yang dipilih
         X_init = log_return_train[matched_col].dropna().values
-        model = best_model
+
+        # Ambil model terbaik untuk saham tersebut
+        if matched_col in best_model:
+            model = best_model[matched_col]
+        else:
+            st.error(f"❌ Model untuk saham '{matched_col}' tidak ditemukan.")
+            st.stop()
+
         dist = model.get('dist', 'normal').lower()
 
         if dist == 'normal':
@@ -766,17 +783,23 @@ elif menu == "Prediksi dan Visualisasi":
         elif dist == 'ged':
             preds_log = predict_mar_ged(model, X_init, n_steps=n_steps)
         else:
-            st.error(f"❌ Distribusi model '{dist}' tidak dikenali.")
+            st.error(f"❌ Distribusi model '{dist}' tidak dikenali atau fungsi prediksi belum tersedia.")
             st.stop()
 
-        st.success(f"✅ Prediksi {n_steps} hari ke depan untuk {harga_col} selesai.")
+        st.success(f"✅ Prediksi {n_steps} hari ke depan untuk {matched_col} selesai.")
 
         if show_as == 'Harga':
             if harga_col in df.columns:
                 last_price = df.loc[df.index[-1], harga_col]
             else:
-                last_price = df.iloc[-1, 1]
-                st.warning(f"⚠️ Kolom {harga_col} tidak ditemukan di df. Menggunakan kolom kedua.")
+                # fallback: pakai kolom kedua harga jika harga_col tidak ditemukan
+                all_harga_cols = [col for col in df.columns if col != 'Date']
+                if len(all_harga_cols) > 0:
+                    last_price = df.loc[df.index[-1], all_harga_cols[0]]
+                    st.warning(f"⚠️ Kolom harga '{harga_col}' tidak ditemukan di df. Menggunakan kolom {all_harga_cols[0]} sebagai harga terakhir.")
+                else:
+                    st.error("❌ Tidak ada kolom harga yang tersedia di df.")
+                    st.stop()
 
             def convert_logreturn_to_price(last_price, logreturns):
                 prices = [last_price]
@@ -790,7 +813,7 @@ elif menu == "Prediksi dan Visualisasi":
                 'Hari ke': np.arange(1, n_steps + 1),
                 'Harga Prediksi': preds_price
             })
-            st.write(f"### 📋 Tabel Prediksi Harga Saham {harga_col}")
+            st.write(f"### 📋 Tabel Prediksi Harga Saham {matched_col}")
             st.dataframe(df_pred.style.format({"Harga Prediksi": "Rp {:,.2f}".format}))
 
             fig, ax = plt.subplots(figsize=(12, 5))
@@ -798,7 +821,7 @@ elif menu == "Prediksi dan Visualisasi":
             ax.plot(harga_hist.index, harga_hist.values, label='Harga Historis', color='blue')
             future_idx = np.arange(harga_hist.index[-1] + 1, harga_hist.index[-1] + n_steps + 1)
             ax.plot(future_idx, preds_price, label='Harga Prediksi', linestyle='--', color='orange')
-            ax.set_title(f"📈 Prediksi Harga Saham {harga_col}")
+            ax.set_title(f"📈 Prediksi Harga Saham {matched_col}")
             ax.set_xlabel("Hari")
             ax.set_ylabel("Harga (Rupiah)")
             ax.legend()
@@ -809,16 +832,17 @@ elif menu == "Prediksi dan Visualisasi":
                 'Hari ke': np.arange(1, n_steps + 1),
                 'Log-Return Prediksi': preds_log
             })
-            st.write(f"### 📋 Tabel Prediksi Log-Return Saham {harga_col}")
+            st.write(f"### 📋 Tabel Prediksi Log-Return Saham {matched_col}")
             st.dataframe(df_pred.style.format({"Log-Return Prediksi": "{:.6f}"}))
 
             fig, ax = plt.subplots(figsize=(12, 5))
             ax.plot(np.arange(len(X_init)), X_init, label='Log-Return Historis', color='green')
             future_idx = np.arange(len(X_init), len(X_init) + n_steps)
             ax.plot(future_idx, preds_log, label='Log-Return Prediksi', linestyle='--', color='red')
-            ax.set_title(f"📈 Prediksi Log-Return Saham {harga_col}")
+            ax.set_title(f"📈 Prediksi Log-Return Saham {matched_col}")
             ax.set_xlabel("Hari")
             ax.set_ylabel("Log-Return")
             ax.legend()
             st.pyplot(fig)
+
 
