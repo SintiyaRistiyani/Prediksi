@@ -230,19 +230,19 @@ elif menu == "Stasioneritas":
     ax[1].set_title("PACF")
     st.pyplot(fig)
         
-        # Skewness & Kurtosis
-        skw = skew(series)
-        krt = kurtosis(series)
-        st.write(f"**Skewness:** {skw:.4f}")
-        st.write(f"**Kurtosis:** {krt:.4f}")
+    # Skewness & Kurtosis
+    skw = skew(series)
+    krt = kurtosis(series)
+    st.write(f"**Skewness:** {skw:.4f}")
+    st.write(f"**Kurtosis:** {krt:.4f}")
     
-        # Visualisasi histogram + KDE
-        fig, ax = plt.subplots(figsize=(10, 4))
-        sns.histplot(series, kde=True, bins=30, color='skyblue', ax=ax)
-        ax.set_title(f'Distribusi Log Return {nama_saham}')
-        ax.set_xlabel('Log Return')
-        ax.set_ylabel('Frekuensi')
-        st.pyplot(fig)
+    # Visualisasi histogram + KDE
+    fig, ax = plt.subplots(figsize=(10, 4))
+    sns.histplot(series, kde=True, bins=30, color='skyblue', ax=ax)
+    ax.set_title(f'Distribusi Log Return {nama_saham}')
+    ax.set_xlabel('Log Return')
+    ax.set_ylabel('Frekuensi')
+    st.pyplot(fig)
 
 # ===================== MENU: Model =====================
 elif menu == "Model":
