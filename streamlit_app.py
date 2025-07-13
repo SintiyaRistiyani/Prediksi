@@ -12,12 +12,8 @@ from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.stattools import adfuller
 from sklearn.metrics import mean_absolute_percentage_error
 from scipy.stats import skew, kurtosis, shapiro, jarque_bera
-from scipy.stats import norm
 from numpy.linalg import LinAlgError
-from scipy.stats import gennorm
 from scipy.optimize import minimize
-from sklearn.metrics import mean_absolute_percentage_error, mean_squared_error, mean_absolute_error
-
 
 # Utility
 from io import StringIO
@@ -677,7 +673,6 @@ elif menu == "Uji Signifikansi dan Residual":
         st.markdown("##### Residual (Komponen Dominan) - MAR-GED")
         result_summary, residuals = test_residual_assumptions_mar(model)
         st.dataframe(result_summary.style.format({"Statistic": "{:.4f}", "p-value": "{:.4f}"}))
-
 
 # ------------------------------- PREDIKSI DAN VISUALISASI ---------------------------------------------
 elif menu == "Prediksi dan Visualisasi":
