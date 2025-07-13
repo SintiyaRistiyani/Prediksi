@@ -16,7 +16,6 @@ from scipy.optimize import minimize
 # Utility
 from io import StringIO
 
-# ================== FUNGSI BANTU ==================
 def load_data(uploaded_file):
     try:
         df = pd.read_csv(uploaded_file)
@@ -35,7 +34,6 @@ def diagnostik_saham(series, nama_saham):
         st.warning("Series log return kosong.")
         return
 
-# ================== FUNGSI EM MAR-NORMAL ==================
 def em_mar_normal_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
     np.random.seed(seed)
     n = len(series)
@@ -89,20 +87,14 @@ def em_mar_normal_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
         'tau': tau, 'X': X, 'y': y, 'dist': 'normal'
     }
 
-# MAR-Normal
 def find_best_K(series, p, K_range, max_iter=100, tol=1e-6):
-    """
-    Cari jumlah komponen K terbaik untuk MAR-Normal berdasarkan BIC
-    """
     results = []
     for K in K_range:
-        print(f"🔄 Estimasi MAR-Normal untuk K={K}...")
+        st.write(f"🔄 Estimasi MAR-Normal untuk K={K}...")
         model = em_mar_normal_manual(series, p, K, max_iter, tol)
         results.append(model)
 
     best_model = min(results, key=lambda x: x['BIC'])
-    print(f"✅ Model terbaik: K={best_model['K']} (BIC={best_model['BIC']:.2f})")
-
     df_bic = pd.DataFrame({
         'K': [m['K'] for m in results],
         'LogLik': [m['loglik'] for m in results],
@@ -112,7 +104,6 @@ def find_best_K(series, p, K_range, max_iter=100, tol=1e-6):
 
     return best_model, df_bic
 
-# ================== FUNGSI EM MAR-GED ==================
 def estimate_beta(residuals, weights, sigma_init=1.0):
     def neg_log_likelihood(beta):
         if beta <= 0: return np.inf
@@ -131,7 +122,7 @@ def em_mar_ged_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
     T_eff = len(y)
 
     phi = np.random.randn(K, p) * 0.1
-    sigma = np.random.rand(K) * 0.05 + 1e-3
+    sigma = np.random.rand(K, 0.05) + 1e-3
     beta = np.full(K, 2.0)
     pi = np.ones(K) / K
     ll_old = -np.inf
@@ -163,6 +154,7 @@ def em_mar_ged_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
 
         pi = tau.mean(axis=0)
         ll_new = np.sum(np.log(np.sum(np.exp(log_tau - log_tau_max), axis=1)) + log_tau_max.flatten())
+
         if np.abs(ll_new - ll_old) < tol:
             break
         ll_old = ll_new
@@ -177,9 +169,24 @@ def em_mar_ged_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
         'tau': tau, 'X': X, 'y': y, 'dist': 'ged'
     }
 
-# ================== FUNGSI PREDIKSI ==================
+def find_best_K_mar_ged(series, p, K_range, max_iter=100, tol=1e-6):
+    results = []
+    for K in K_range:
+        st.write(f"🔄 Estimasi MAR-GED untuk K={K}...")
+        model = em_mar_ged_manual(series, p, K, max_iter, tol)
+        results.append(model)
+
+    best_model = min(results, key=lambda x: x['BIC'])
+    df_bic = pd.DataFrame({
+        'K': [m['K'] for m in results],
+        'LogLik': [m['loglik'] for m in results],
+        'AIC': [m['AIC'] for m in results],
+        'BIC': [m['BIC'] for m in results]
+    })
+
+    return best_model, df_bic
+
 def predict_mar_normal(model, series, n_steps):
-    series = series.copy()
     phi, pi, K, p = model['phi'], model['pi'], model['K'], model['phi'].shape[1]
     history = list(series[-p:])
     preds = []
@@ -192,7 +199,6 @@ def predict_mar_normal(model, series, n_steps):
 def predict_mar_ged(model, series, n_steps):
     return predict_mar_normal(model, series, n_steps)
 
-# ================== FUNGSI DIAGNOSTIK ==================
 def compute_residuals_mar(model):
     tau, X, y, phi = model['tau'], model['X'], model['y'], model['phi']
     dominant = np.argmax(tau, axis=1)
@@ -214,7 +220,6 @@ def test_residual_assumptions(model, lags=10):
     })
     return result_df, residuals
 
-# ================== FUNGSI BANTU LAIN ==================
 def convert_logreturn_to_price(last_price, log_returns):
     prices = [last_price]
     for r in log_returns:
@@ -240,61 +245,6 @@ menu = st.sidebar.radio("Pilih Halaman:", (
     "Prediksi dan Visualisasi", 
     "Interpretasi dan Saran"
 ))
-#======== PENDUKUNG ===================
-
-def compute_mar_residuals(result):
-    """
-    Hitung residual MAR-Normal berdasarkan komponen dominan tiap waktu t.
-    """
-    tau = result['tau']         # (T x K)
-    X = result['X']             # (T x p)
-    y = result['y']             # (T,)
-    phi = result['phi']         # (K x p)
-
-    dominant_comp = np.argmax(tau, axis=1)
-    residuals = np.zeros(len(y))
-
-    for t in range(len(y)):
-        k = dominant_comp[t]
-        residuals[t] = y[t] - X[t] @ phi[k]
-
-    return residuals
-
-
-def test_residual_assumptions(result, lags=10, alpha=0.05):
-    """
-    Uji asumsi residual MAR-Normal:
-    - Normalitas (Kolmogorov-Smirnov)
-    - Autokorelasi (Ljung-Box)
-    """
-    residuals = compute_mar_residuals(result)
-    n = len(residuals)
-
-    # Normalisasi residual sebelum K–S
-    resid_std = (residuals - np.mean(residuals)) / np.std(residuals)
-
-    # --- Kolmogorov-Smirnov Test (Normalitas) ---
-    ks_stat, ks_pvalue = kstest(resid_std, 'norm')
-    ks_decision = 'Tolak H0 (Tidak Normal)' if ks_pvalue < alpha else 'Gagal Tolak H0 (Normal)'
-
-    # --- Ljung-Box Test (Autokorelasi) ---
-    lb_result = acorr_ljungbox(residuals, lags=lags, return_df=True)
-    lb_stat = lb_result['lb_stat'].values[-1]
-    lb_pvalue = lb_result['lb_pvalue'].values[-1]
-    lb_decision = 'Tolak H0 (Ada Autokorelasi)' if lb_pvalue < alpha else 'Gagal Tolak H0 (Tidak Ada Autokorelasi)'
-
-    # Buat tabel hasil
-    result_summary = pd.DataFrame({
-        'Test': ['Kolmogorov-Smirnov', 'Ljung-Box'],
-        'Statistic': [ks_stat, lb_stat],
-        'p-value': [ks_pvalue, lb_pvalue],
-        'Hipotesis Nol (H0)': ['Residual mengikuti distribusi normal', 'Tidak ada autokorelasi residual'],
-        'Keputusan': [ks_decision, lb_decision]
-    })
-
-    return result_summary, residuals
-
-
 
 # ---------------------------- Halaman Home ----------------------------------------------
 if menu == "Home":
