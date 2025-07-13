@@ -807,3 +807,84 @@ elif menu == "Prediksi dan Visualisasi":
             ax.set_ylabel("Log-Return")
             ax.legend()
             st.pyplot(fig)
+# ========================================= INTERPRETASI DAN SARAN ===========================================================
+elif menu == "Interpretasi dan Saran":
+
+    st.title("📈 Interpretasi Model dan Rekomendasi")
+
+    if 'best_model' not in st.session_state or 'model_choice' not in st.session_state:
+        st.warning("⚠️ Silakan lakukan estimasi model dulu di halaman Model.")
+        st.stop()
+
+    model = st.session_state['best_model']
+    model_choice = st.session_state['model_choice']
+    p = st.session_state.get('best_p', 1)
+    K = st.session_state.get('best_k', model['K'])
+
+    st.markdown(f"### Model Terpilih: {model_choice} dengan K={K} komponen dan orde AR(p)={p}")
+
+    # Tampilkan parameter phi per komponen
+    st.subheader("Parameter AR (phi) per Komponen")
+    phi_df = pd.DataFrame(model['phi'], columns=[f'phi_{i+1}' for i in range(p)])
+    phi_df.index = [f'Komponen {k+1}' for k in range(K)]
+    st.dataframe(phi_df.round(4))
+
+    # Tampilkan parameter sigma dan pi
+    st.subheader("Parameter Varians (sigma) dan Proporsi Komponen (pi)")
+    params_df = pd.DataFrame({
+        'sigma': model['sigma'],
+        'pi': model['pi']
+    }, index=[f'Komponen {k+1}' for k in range(K)])
+    if model_choice == "MAR-GED":
+        params_df['beta'] = model['beta']
+    st.dataframe(params_df.round(4))
+
+    # Interpretasi sederhana
+    st.markdown("### Interpretasi Singkat")
+    st.markdown("""
+    - **Parameter AR (phi)** menunjukkan kekuatan hubungan lag pada masing-masing komponen model.
+    - **Sigma** menggambarkan volatilitas/residual standar pada komponen tersebut.
+    - **Pi** adalah proporsi kontribusi setiap komponen dalam campuran.
+    """)
+
+    if model_choice == "MAR-GED":
+        st.markdown("- **Beta** pada GED mengatur ketebalan ekor distribusi, nilai beta < 2 menunjukkan ekor yang lebih berat dibanding normal.")
+
+    # Saran penggunaan model
+    st.subheader("Saran Penggunaan Model")
+    st.markdown("""
+    - Gunakan model ini untuk memprediksi harga saham dengan mempertimbangkan adanya campuran beberapa proses autoregresif yang berbeda.
+    - Jika model MAR-GED dipilih, model ini cocok untuk data dengan distribusi heavy-tailed atau outlier.
+    - Selalu cek asumsi residual dan lakukan validasi model untuk memastikan performa prediksi yang baik.
+    """)
+
+    # Tombol untuk simpan hasil interpretasi sebagai file txt (optional)
+    if st.button("💾 Simpan Interpretasi ke File"):
+        interpretasi_text = f"""
+        Model Terpilih: {model_choice} dengan K={K} komponen dan orde AR(p)={p}\n
+        Parameter AR (phi):\n{phi_df.round(4).to_string()}\n
+        Parameter Sigma dan Pi:\n{params_df.round(4).to_string()}\n
+        """
+        if model_choice == "MAR-GED":
+            interpretasi_text += f"Beta:\n{params_df['beta'].round(4).to_string()}\n"
+
+        interpretasi_text += """
+        Interpretasi:
+        - Parameter AR (phi) menunjukkan kekuatan hubungan lag pada masing-masing komponen model.
+        - Sigma menggambarkan volatilitas/residual standar pada komponen tersebut.
+        - Pi adalah proporsi kontribusi setiap komponen dalam campuran.
+        """
+
+        if model_choice == "MAR-GED":
+            interpretasi_text += "- Beta pada GED mengatur ketebalan ekor distribusi, nilai beta < 2 menunjukkan ekor yang lebih berat dibanding normal.\n"
+
+        interpretasi_text += """
+        Saran:
+        - Gunakan model ini untuk prediksi harga saham dengan campuran beberapa proses autoregresif.
+        - Cek asumsi residual dan validasi model secara berkala.
+        """
+
+        with open("interpretasi_saran.txt", "w") as f:
+            f.write(interpretasi_text)
+
+        st.success("✅ File interpretasi_saran.txt berhasil disimpan di direktori aplikasi.")
