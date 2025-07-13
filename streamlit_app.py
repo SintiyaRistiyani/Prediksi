@@ -206,9 +206,6 @@ def em_mar_normal_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
     }
 
 # MAR-NORMAL
-from scipy.stats import norm
-import numpy as np
-import pandas as pd
 
 def test_significance_mar(result):
     """
@@ -427,9 +424,6 @@ def find_best_K_mar_ged(series, p, K_range, max_iter=100, tol=1e-6):
         'BIC': [m['BIC'] for m in results]
     })
 # Signifikan
-from scipy.stats import norm
-import numpy as np
-import pandas as pd
 
 def test_significance_ar_params_mar_ged(X, y, phi, sigma, beta, tau):
     """
@@ -466,11 +460,6 @@ def test_significance_ar_params_mar_ged(X, y, phi, sigma, beta, tau):
     
     
 # Residual
-from scipy.stats import kstest, norm, gennorm
-from statsmodels.stats.diagnostic import acorr_ljungbox
-import numpy as np
-import pandas as pd
-
 def compute_residuals_mar(model):
     """
     Hitung residual berdasarkan komponen dominan (argmax dari tau)
@@ -573,10 +562,6 @@ menu = st.sidebar.radio("Pilih Halaman:", (
     "Interpretasi dan Saran"
 ))
 #======== PENDUKUNG ===================
-from scipy.stats import kstest, norm
-from statsmodels.stats.diagnostic import acorr_ljungbox
-import numpy as np
-import pandas as pd
 
 def compute_mar_residuals(result):
     """
@@ -951,6 +936,19 @@ def compute_price_metrics(actual, pred):
 if menu == "Prediksi dan Visualisasi":
     st.header("🔮 Prediksi Harga & Visualisasi")
 
+    # Cek apakah data sudah tersedia di session state
+    required_keys = ['log_return_train', 'test', 'df', 'best_models']
+    for key in required_keys:
+        if key not in st.session_state:
+            st.error(f"❌ Data {key} belum tersedia. Silakan lakukan preprocessing dan estimasi model terlebih dahulu.")
+            st.stop()
+
+    # Ambil data dari session state
+    log_return_train = st.session_state['log_return_train']
+    log_return_test = st.session_state['test']['Log Return']
+    df = st.session_state['df']
+    best_models = st.session_state['best_models']
+
     nama_saham = st.selectbox("Pilih Saham", list(log_return_train.columns))
 
     mode_prediksi = st.radio("Pilih Mode Prediksi", ['Out-of-Sample', 'Forecast Masa Depan'])
@@ -963,7 +961,7 @@ if menu == "Prediksi dan Visualisasi":
         st.subheader(f"📈 Out-of-Sample Prediction: {nama_saham}")
 
         y_test_actual = log_return_test[nama_saham].dropna().values
-        y_test_pred = model['y_pred_outsample']  # Pastikan output ini ada di model kamu
+        y_test_pred = model['y_pred_outsample']  # Pastikan output ini sudah disimpan saat estimasi
 
         if show_as == 'Log-Return':
             fig, ax = plt.subplots(figsize=(10,4))
@@ -974,7 +972,7 @@ if menu == "Prediksi dan Visualisasi":
             st.pyplot(fig)
 
         else:
-            first_test_idx = log_return_test.index[0]
+            first_test_idx = st.session_state['test'].index[0]
             idx_loc = df.index.get_loc(first_test_idx)
             last_price = df.iloc[idx_loc - 1][nama_saham]
 
@@ -988,6 +986,7 @@ if menu == "Prediksi dan Visualisasi":
             ax.legend()
             st.pyplot(fig)
 
+            # Hitung MAPE, RMSE, MAE
             mape, rmse, mae = compute_price_metrics(actual_price, pred_price)
 
             st.write("📊 **Tabel Performa Out-of-Sample (Harga)**")
@@ -1011,11 +1010,14 @@ if menu == "Prediksi dan Visualisasi":
 
         n_steps = 30
 
-        # Pilih fungsi prediksi sesuai model
+        # Pilih fungsi prediksi sesuai distribusi
         if model['dist'] == 'normal':
             pred_log = predict_mar_normal(model, data_train_saham, n_steps=n_steps)
-        else:
+        elif model['dist'] == 'ged':
             pred_log = predict_mar_ged(model, data_train_saham, n_steps=n_steps)
+        else:
+            st.error("Distribusi model tidak dikenali.")
+            st.stop()
 
         if show_as == 'Log-Return':
             fig, ax = plt.subplots(figsize=(10,4))
@@ -1027,7 +1029,7 @@ if menu == "Prediksi dan Visualisasi":
             st.pyplot(fig)
 
         else:
-            last_price = df.iloc[-1][nama_saham]
+            last_price = df[nama_saham].dropna().values[-1]
             pred_price = convert_logreturn_to_price(last_price, pred_log)
 
             harga_hist = df[nama_saham].dropna().values
