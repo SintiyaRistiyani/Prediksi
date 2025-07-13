@@ -235,12 +235,17 @@ elif menu == "Stasioneritas":
     # === Plot ACF & PACF ===
 
     st.markdown("### 🔁 ACF dan PACF Plot")
-    fig, ax = plt.subplots(1, 2, figsize=(12, 4))
-    plot_acf(train['Log Return'], ax=ax[0], lags=20)
-    plot_pacf(train['Log Return'], ax=ax[1], lags=20, method='ywm')
-    ax[0].set_title("ACF")
-    ax[1].set_title("PACF")
-    st.pyplot(fig)
+
+fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+plot_acf(train['Log Return'], ax=axes[0], lags=20)
+axes[0].set_title("ACF")
+
+plot_pacf(train['Log Return'], ax=axes[1], lags=20, method='ywm')
+axes[1].set_title("PACF")
+
+st.pyplot(fig)
+
         
     skw = skew(train['Log Return'])
     krt = kurtosis(train['Log Return'])
