@@ -181,199 +181,8 @@ elif menu == "Stasioneritas":
     ax.grid(True)
     st.pyplot(fig)
 # ====================================== MODEL ====================================================
-# --- Fungsi build_X untuk regresi lag p ---
-def build_X(y, p):
-    T = len(y)
-    return np.column_stack([y[(p - i - 1):(T - i - 1)] for i in range(p)])
-
-# --- EM MAR-Normal ---
-def em_mar_normal_manual(y, p, K, max_iter=100, tol=1e-6, seed=42):
-    np.random.seed(seed)
-    n = len(y)
-    y_p = y[p:]
-    X = build_X(y, p)
-    T_eff = len(y_p)
-
-    phi = np.random.randn(K, p) * 0.1
-    sigma = np.random.rand(K) * 0.05 + 1e-3
-    pi = np.ones(K) / K
-    ll_old = -np.inf
-
-    for iteration in range(max_iter):
-        log_tau = np.zeros((T_eff, K))
-        for k in range(K):
-            mu_k = X @ phi[k]
-            log_pdf = np.log(np.maximum(pi[k], 1e-8)) + norm.logpdf(y_p, loc=mu_k, scale=np.maximum(sigma[k], 1e-6))
-            log_tau[:, k] = log_pdf
-
-        log_tau_max = np.max(log_tau, axis=1, keepdims=True)
-        tau = np.exp(log_tau - log_tau_max)
-        tau /= tau.sum(axis=1, keepdims=True)
-
-        for k in range(K):
-            w = tau[:, k]
-            W = np.diag(w)
-            XtWX = X.T @ W @ X
-            XtWy = X.T @ (w * y_p)
-            try:
-                XtWX += 1e-6 * np.eye(p)
-                phi[k] = np.linalg.solve(XtWX, XtWy)
-            except LinAlgError:
-                phi[k] = np.linalg.lstsq(XtWX, XtWy, rcond=None)[0]
-
-            mu_k = X @ phi[k]
-            resid = y_p - mu_k
-            sigma[k] = max(np.sqrt(np.sum(w * resid**2) / np.sum(w)), 1e-6)
-
-        pi = tau.mean(axis=0)
-        pi = np.maximum(pi, 1e-8)
-        pi /= pi.sum()
-
-        ll_new = np.sum(np.log(np.sum(np.exp(log_tau - log_tau_max), axis=1)) + log_tau_max.flatten())
-        if np.abs(ll_new - ll_old) < tol:
-            break
-        ll_old = ll_new
-
-    num_params = K * (p + 1) + (K - 1)  # phi, sigma, pi
-    aic = -2 * ll_new + 2 * num_params
-    bic = -2 * ll_new + np.log(T_eff) * num_params
-
-    return {
-        'K': K,
-        'phi': phi,
-        'sigma': sigma,
-        'pi': pi,
-        'LogLik': ll_new,
-        'AIC': aic,
-        'BIC': bic,
-        'tau': tau,
-        'y': y_p,
-        'X': X,
-        'dist': 'normal',
-        'p': p
-    }
-
-# --- Estimasi beta GED ---
-def estimate_beta(residuals, weights, sigma_init=1.0):
-    def neg_log_likelihood(beta):
-        if beta <= 0:
-            return np.inf
-        pdf_vals = gennorm.pdf(residuals, beta, loc=0, scale=sigma_init)
-        logpdf = np.log(pdf_vals + 1e-12)
-        return -np.sum(weights * logpdf)
-
-    result = minimize(neg_log_likelihood, x0=np.array([2.0]), bounds=[(0.1, 10)])
-    return result.x[0] if result.success else 2.0
-
-# --- EM MAR-GED ---
-def em_mar_ged_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
-    np.random.seed(seed)
-    n = len(series)
-    y = series[p:]
-    X = build_X(series, p)
-    T_eff = len(y)
-
-    phi = np.random.randn(K, p) * 0.1
-    sigma = np.random.rand(K) * 0.05 + 1e-3
-    beta = np.full(K, 2.0)
-    pi = np.ones(K) / K
-    ll_old = -np.inf
-
-    for iteration in range(max_iter):
-        log_tau = np.zeros((T_eff, K))
-        for k in range(K):
-            mu_k = X @ phi[k]
-            log_pdf = gennorm.logpdf(y, beta[k], loc=mu_k, scale=np.maximum(sigma[k], 1e-6))
-            log_tau[:, k] = np.log(np.maximum(pi[k], 1e-8)) + log_pdf
-
-        log_tau_max = np.max(log_tau, axis=1, keepdims=True)
-        tau = np.exp(log_tau - log_tau_max)
-        tau /= tau.sum(axis=1, keepdims=True)
-
-        for k in range(K):
-            w = tau[:, k]
-            W = np.diag(w)
-            XtWX = X.T @ W @ X
-            XtWy = X.T @ (w * y)
-            try:
-                XtWX += 1e-6 * np.eye(p)
-                phi[k] = np.linalg.solve(XtWX, XtWy)
-            except LinAlgError:
-                phi[k] = np.linalg.lstsq(XtWX, XtWy, rcond=None)[0]
-
-            mu_k = X @ phi[k]
-            resid = y - mu_k
-            sigma[k] = max(np.sqrt(np.sum(w * resid**2) / np.sum(w)), 1e-6)
-            beta[k] = estimate_beta(resid, w, sigma_init=sigma[k])
-
-        pi = tau.mean(axis=0)
-        pi = np.maximum(pi, 1e-8)
-        pi /= pi.sum()
-
-        ll_new = np.sum(np.log(np.sum(np.exp(log_tau - log_tau_max), axis=1)) + log_tau_max.flatten())
-        if np.abs(ll_new - ll_old) < tol:
-            break
-        ll_old = ll_new
-
-    num_params = K * (p + 2) + (K - 1)  # phi, sigma, beta, pi
-    aic = -2 * ll_new + 2 * num_params
-    bic = -2 * ll_new + np.log(T_eff) * num_params
-
-    return {
-        'K': K,
-        'phi': phi,
-        'sigma': sigma,
-        'pi': pi,
-        'beta': beta,
-        'LogLik': ll_new,
-        'AIC': aic,
-        'BIC': bic,
-        'tau': tau,
-        'y': y,
-        'X': X,
-        'dist': 'ged',
-        'p': p
-    }
-
-# --- Grid search K terbaik MAR-Normal ---
-def find_best_K_mar_normal(series, p, K_range):
-    results = []
-    best_model = None
-    best_bic = np.inf
-    for K in K_range:
-        try:
-            model = em_mar_normal_manual(series, p, K)
-            results.append({'K': K, 'LogLik': model['LogLik'], 'AIC': model['AIC'], 'BIC': model['BIC'], 'model': model})
-            if model['BIC'] < best_bic:
-                best_bic = model['BIC']
-                best_model = model
-        except Exception as e:
-            st.error(f"Error estimasi MAR-Normal K={K}: {e}")
-
-    df_bic = pd.DataFrame(results).drop(columns=['model'])
-    return best_model, df_bic
-
-# --- Grid search K terbaik MAR-GED ---
-def find_best_K_mar_ged(series, p, K_range):
-    results = []
-    best_model = None
-    best_bic = np.inf
-    for K in K_range:
-        try:
-            model = em_mar_ged_manual(series, p, K)
-            results.append({'K': K, 'LogLik': model['LogLik'], 'AIC': model['AIC'], 'BIC': model['BIC'], 'model': model})
-            if model['BIC'] < best_bic:
-                best_bic = model['BIC']
-                best_model = model
-        except Exception as e:
-            st.error(f"Error estimasi MAR-GED K={K}: {e}")
-
-    df_bic = pd.DataFrame(results).drop(columns=['model'])
-    return best_model, df_bic
-
-
-# ==== HALAMAN MODEL ====
 elif menu == "Model":
+
     st.title("🏗️ Pemodelan Mixture Autoregressive (MAR)")
 
     if 'log_return_train' not in st.session_state:
@@ -387,10 +196,223 @@ elif menu == "Model":
     p_input = st.number_input("Masukkan orde AR (p):", min_value=1, max_value=5, value=1)
     k_max = st.slider("Pilih K maksimal (jumlah komponen):", min_value=2, max_value=5, value=3)
 
+    # ===== Fungsi-fungsi pembantu EM MAR-Normal & MAR-GED =====
+    import numpy as np
+
+    def build_X(y, p):
+        # buat matrix X dari y lag p
+        T = len(y)
+        X = np.column_stack([y[(p - i - 1):(T - i - 1)] for i in range(p)])
+        return X
+
+    def em_mar_normal_manual(y, p, K, max_iter=100, tol=1e-6):
+        T = len(y)
+        X = build_X(y, p)
+        y_p = y[p:]
+        n = len(y_p)
+
+        # Initialize parameters
+        np.random.seed(42)
+        phi = np.random.randn(K, p) * 0.1
+        sigma = np.ones(K) * np.std(y_p)
+        pi = np.ones(K) / K
+
+        tau = np.zeros((n, K))
+
+        log_likelihood_old = -np.inf
+
+        for iteration in range(max_iter):
+            # E-step
+            for k in range(K):
+                mu = X @ phi[k]
+                pdf = (1 / (np.sqrt(2 * np.pi) * sigma[k])) * np.exp(-0.5 * ((y_p - mu) / sigma[k]) ** 2)
+                tau[:, k] = pi[k] * pdf
+            tau_sum = tau.sum(axis=1, keepdims=True)
+            tau = tau / tau_sum
+
+            # M-step
+            Nk = tau.sum(axis=0)
+            pi = Nk / n
+            for k in range(K):
+                W = np.diag(tau[:, k])
+                # Weighted least squares
+                XtW = X.T @ W
+                try:
+                    phi[k] = np.linalg.solve(XtW @ X, XtW @ y_p)
+                except np.linalg.LinAlgError:
+                    phi[k] = np.linalg.lstsq(XtW @ X, XtW @ y_p, rcond=None)[0]
+                mu = X @ phi[k]
+                sigma[k] = np.sqrt(np.sum(tau[:, k] * (y_p - mu) ** 2) / Nk[k])
+
+            # Log-likelihood
+            ll = 0
+            for k in range(K):
+                mu = X @ phi[k]
+                ll += pi[k] * (1 / (np.sqrt(2 * np.pi) * sigma[k])) * np.exp(-0.5 * ((y_p - mu) / sigma[k]) ** 2)
+            log_likelihood = np.sum(np.log(ll + 1e-12))  # Add small constant untuk stabilitas
+
+            if np.abs(log_likelihood - log_likelihood_old) < tol:
+                break
+            log_likelihood_old = log_likelihood
+
+        # Info criteria
+        n_params = K * (p + 2) - 1  # phi (p*K), sigma (K), pi (K-1)
+        aic = -2 * log_likelihood + 2 * n_params
+        bic = -2 * log_likelihood + n_params * np.log(n)
+
+        return {
+            'K': K,
+            'phi': phi,
+            'sigma': sigma,
+            'pi': pi,
+            'LogLik': log_likelihood,
+            'AIC': aic,
+            'BIC': bic,
+            'tau': tau,
+            'y': y_p,
+            'X': X,
+            'dist': 'normal',
+            'p': p
+        }
+
+    def ged_pdf(x, mu, sigma, beta):
+        c = beta / (2 * sigma * np.exp(np.log(2) / beta) * np.math.gamma(1 / beta))
+        return c * np.exp(- (np.abs((x - mu) / sigma)) ** beta)
+
+    def em_mar_ged_manual(y, p, K, max_iter=100, tol=1e-6):
+        from scipy.special import gamma
+        T = len(y)
+        X = build_X(y, p)
+        y_p = y[p:]
+        n = len(y_p)
+
+        # Initialize parameters
+        np.random.seed(42)
+        phi = np.random.randn(K, p) * 0.1
+        sigma = np.ones(K) * np.std(y_p)
+        beta = np.ones(K) * 1.5  # shape parameter GED, 1.5 awal
+        pi = np.ones(K) / K
+
+        tau = np.zeros((n, K))
+
+        log_likelihood_old = -np.inf
+
+        for iteration in range(max_iter):
+            # E-step
+            for k in range(K):
+                mu = X @ phi[k]
+                # pdf GED per titik
+                c = beta[k] / (2 * sigma[k] * gamma(1 / beta[k]))
+                pdf = c * np.exp(- (np.abs((y_p - mu) / sigma[k])) ** beta[k])
+                tau[:, k] = pi[k] * pdf
+            tau_sum = tau.sum(axis=1, keepdims=True)
+            tau = tau / tau_sum
+
+            # M-step
+            Nk = tau.sum(axis=0)
+            pi = Nk / n
+            for k in range(K):
+                W = np.diag(tau[:, k])
+                # Weighted least squares
+                XtW = X.T @ W
+                try:
+                    phi[k] = np.linalg.solve(XtW @ X, XtW @ y_p)
+                except np.linalg.LinAlgError:
+                    phi[k] = np.linalg.lstsq(XtW @ X, XtW @ y_p, rcond=None)[0]
+                mu = X @ phi[k]
+                # Update sigma numerically
+                def sigma_obj(s):
+                    if s <= 0:
+                        return np.inf
+                    res = tau[:, k] * (np.abs((y_p - mu) / s) ** beta[k])
+                    return np.sum(res) / Nk[k] - gamma(1 / beta[k]) / gamma(3 / beta[k])
+                res_sigma = minimize(sigma_obj, sigma[k], bounds=[(1e-6, None)])
+                sigma[k] = res_sigma.x[0]
+
+                # Update beta numerically
+                def beta_obj(b):
+                    if b <= 0:
+                        return np.inf
+                    val = -n * (np.log(b) - np.log(2) - np.log(sigma[k]) - np.log(gamma(1 / b))) + \
+                          np.sum(tau[:, k] * (np.abs((y_p - mu) / sigma[k]) ** b) * np.log(np.abs((y_p - mu) / sigma[k]) + 1e-12))
+                    return val
+                res_beta = minimize(beta_obj, beta[k], bounds=[(0.1, 10)])
+                beta[k] = res_beta.x[0]
+
+            # Log-likelihood
+            ll = 0
+            for k in range(K):
+                mu = X @ phi[k]
+                c = beta[k] / (2 * sigma[k] * gamma(1 / beta[k]))
+                pdf = c * np.exp(- (np.abs((y_p - mu) / sigma[k])) ** beta[k])
+                ll += pi[k] * pdf
+            log_likelihood = np.sum(np.log(ll + 1e-12))
+
+            if np.abs(log_likelihood - log_likelihood_old) < tol:
+                break
+            log_likelihood_old = log_likelihood
+
+        n_params = K * (p + 3) - 1  # phi(p*K), sigma(K), beta(K), pi(K-1)
+        aic = -2 * log_likelihood + 2 * n_params
+        bic = -2 * log_likelihood + n_params * np.log(n)
+
+        return {
+            'K': K,
+            'phi': phi,
+            'sigma': sigma,
+            'beta': beta,
+            'pi': pi,
+            'LogLik': log_likelihood,
+            'AIC': aic,
+            'BIC': bic,
+            'tau': tau,
+            'y': y_p,
+            'X': X,
+            'dist': 'ged',
+            'p': p
+        }
+
+    def find_best_K(series, p, K_range):
+        results = []
+        best_model = None
+        best_bic = np.inf
+        for K in K_range:
+            try:
+                model = em_mar_normal_manual(series, p, K)
+                bic = model['BIC']
+                results.append({'K': K, 'LogLik': model['LogLik'], 'AIC': model['AIC'], 'BIC': bic})
+                if bic < best_bic:
+                    best_bic = bic
+                    best_model = model
+            except Exception as e:
+                st.error(f"Error estimasi MAR-Normal K={K}: {e}")
+        df_bic = pd.DataFrame(results)
+        return best_model, df_bic
+
+    def find_best_K_mar_ged(series, p, K_range):
+        results = []
+        best_model = None
+        best_bic = np.inf
+        for K in K_range:
+            try:
+                model = em_mar_ged_manual(series, p, K)
+                bic = model['BIC']
+                results.append({'K': K, 'LogLik': model['LogLik'], 'AIC': model['AIC'], 'BIC': bic})
+                if bic < best_bic:
+                    best_bic = bic
+                    best_model = model
+            except Exception as e:
+                st.error(f"Error estimasi MAR-GED K={K}: {e}")
+        df_bic = pd.DataFrame(results)
+        return best_model, df_bic
+
+    # ===== Akhir fungsi pembantu =====
+
     if st.button("🔍 Cari K Terbaik & Estimasi Model"):
         with st.spinner("⏳ Menjalankan EM Algorithm & Pencarian K Terbaik..."):
+
             if model_choice == "MAR-Normal":
-                best_model, df_bic = find_best_K_mar_normal(series, p_input, range(1, k_max + 1))
+                best_model, df_bic = find_best_K(series, p_input, range(1, k_max + 1))
             else:
                 best_model, df_bic = find_best_K_mar_ged(series, p_input, range(1, k_max + 1))
 
@@ -415,7 +437,7 @@ elif menu == "Model":
                     param_data.append(row)
                 st.dataframe(pd.DataFrame(param_data).round(4))
 
-                # Simpan hasil ke session_state
+                # Simpan hasil model di session_state
                 st.session_state['best_model'] = best_model
                 st.session_state['model_choice'] = model_choice
                 st.session_state['best_k'] = best_model['K']
