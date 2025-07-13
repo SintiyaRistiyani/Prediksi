@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.cluster import KMeans
-from scipy.stats import gennorm, norm, kstest
+from scipy.stats import gennorm, norm, kstest, skew, kurtosis
 from statsmodels.tools.tools import add_constant
 from statsmodels.stats.diagnostic import acorr_ljungbox, het_white
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
