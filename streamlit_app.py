@@ -2,236 +2,25 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import altair as alt
 import seaborn as sns
 from sklearn.cluster import KMeans
-from scipy.stats import gennorm, norm, kstest, skew, kurtosis
+from scipy.stats import gennorm, norm, kstest
 from statsmodels.tools.tools import add_constant
 from statsmodels.stats.diagnostic import acorr_ljungbox, het_white
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.stattools import adfuller
-from sklearn.metrics import mean_absolute_percentage_error, mean_squared_error, mean_absolute_error
+from sklearn.metrics import mean_absolute_percentage_error
+from scipy.stats import skew, kurtosis, shapiro, jarque_bera
+from scipy.stats import norm
 from numpy.linalg import LinAlgError
+from scipy.stats import gennorm
 from scipy.optimize import minimize
+from sklearn.metrics import mean_absolute_percentage_error, mean_squared_error, mean_absolute_error
+
 
 # Utility
 from io import StringIO
-
-def load_data(uploaded_file):
-    try:
-        df = pd.read_csv(uploaded_file)
-        return df
-    except Exception as e:
-        st.error(f"Gagal membaca file: {e}")
-        return None
-
-def check_stationarity(series):
-    result = adfuller(series.dropna())
-    return result
-
-def diagnostik_saham(series, nama_saham):
-    st.markdown(f"## 🧪 Uji Diagnostik Distribusi: {nama_saham}")
-    if series is None or len(series) == 0:
-        st.warning("Series log return kosong.")
-        return
-
-def em_mar_normal_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
-    np.random.seed(seed)
-    n = len(series)
-    y = series[p:]
-    X = np.column_stack([series[p - i - 1: n - i - 1] for i in range(p)])
-    T_eff = len(y)
-
-    phi = np.random.randn(K, p) * 0.1
-    sigma = np.random.rand(K) * 0.05 + 1e-3
-    pi = np.ones(K) / K
-    ll_old = -np.inf
-
-    for iteration in range(max_iter):
-        log_tau = np.zeros((T_eff, K))
-        for k in range(K):
-            mu_k = X @ phi[k]
-            log_pdf = norm.logpdf(y, loc=mu_k, scale=np.maximum(sigma[k], 1e-6))
-            log_tau[:, k] = np.log(np.maximum(pi[k], 1e-8)) + log_pdf
-
-        log_tau_max = np.max(log_tau, axis=1, keepdims=True)
-        tau = np.exp(log_tau - log_tau_max)
-        tau /= tau.sum(axis=1, keepdims=True)
-
-        for k in range(K):
-            w = tau[:, k]
-            W = np.diag(w)
-            XtWX = X.T @ W @ X + 1e-6 * np.eye(p)
-            XtWy = X.T @ (w * y)
-            try:
-                phi[k] = np.linalg.solve(XtWX, XtWy)
-            except LinAlgError:
-                phi[k] = np.linalg.lstsq(XtWX, XtWy, rcond=None)[0]
-            mu_k = X @ phi[k]
-            resid = y - mu_k
-            sigma[k] = max(np.sqrt(np.sum(w * resid ** 2) / np.sum(w)), 1e-6)
-
-        pi = tau.mean(axis=0)
-        ll_new = np.sum(np.log(np.sum(np.exp(log_tau - log_tau_max), axis=1)) + log_tau_max.flatten())
-
-        if np.abs(ll_new - ll_old) < tol:
-            break
-        ll_old = ll_new
-
-    num_params = K * (p + 1) + (K - 1)
-    aic = -2 * ll_new + 2 * num_params
-    bic = -2 * ll_new + np.log(T_eff) * num_params
-
-    return {
-        'K': K, 'phi': phi, 'sigma': sigma, 'pi': pi,
-        'loglik': ll_new, 'AIC': aic, 'BIC': bic,
-        'tau': tau, 'X': X, 'y': y, 'dist': 'normal'
-    }
-
-def find_best_K(series, p, K_range, max_iter=100, tol=1e-6):
-    results = []
-    for K in K_range:
-        st.write(f"🔄 Estimasi MAR-Normal untuk K={K}...")
-        model = em_mar_normal_manual(series, p, K, max_iter, tol)
-        results.append(model)
-
-    best_model = min(results, key=lambda x: x['BIC'])
-    df_bic = pd.DataFrame({
-        'K': [m['K'] for m in results],
-        'LogLik': [m['loglik'] for m in results],
-        'AIC': [m['AIC'] for m in results],
-        'BIC': [m['BIC'] for m in results]
-    })
-
-    return best_model, df_bic
-
-def estimate_beta(residuals, weights, sigma_init=1.0):
-    def neg_log_likelihood(beta):
-        if beta <= 0: return np.inf
-        pdf_vals = gennorm.pdf(residuals, beta, loc=0, scale=sigma_init)
-        logpdf = np.log(pdf_vals + 1e-12)
-        return -np.sum(weights * logpdf)
-
-    result = minimize(neg_log_likelihood, x0=np.array([2.0]), bounds=[(0.1, 10)])
-    return result.x[0] if result.success else 2.0
-
-def em_mar_ged_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
-    np.random.seed(seed)
-    n = len(series)
-    y = series[p:]
-    X = np.column_stack([series[p - i - 1: n - i - 1] for i in range(p)])
-    T_eff = len(y)
-
-    phi = np.random.randn(K, p) * 0.1
-    sigma = np.random.rand(K, 0.05) + 1e-3
-    beta = np.full(K, 2.0)
-    pi = np.ones(K) / K
-    ll_old = -np.inf
-
-    for iteration in range(max_iter):
-        log_tau = np.zeros((T_eff, K))
-        for k in range(K):
-            mu_k = X @ phi[k]
-            log_pdf = gennorm.logpdf(y, beta[k], loc=mu_k, scale=np.maximum(sigma[k], 1e-6))
-            log_tau[:, k] = np.log(np.maximum(pi[k], 1e-8)) + log_pdf
-
-        log_tau_max = np.max(log_tau, axis=1, keepdims=True)
-        tau = np.exp(log_tau - log_tau_max)
-        tau /= tau.sum(axis=1, keepdims=True)
-
-        for k in range(K):
-            w = tau[:, k]
-            W = np.diag(w)
-            XtWX = X.T @ W @ X + 1e-6 * np.eye(p)
-            XtWy = X.T @ (w * y)
-            try:
-                phi[k] = np.linalg.solve(XtWX, XtWy)
-            except LinAlgError:
-                phi[k] = np.linalg.lstsq(XtWX, XtWy, rcond=None)[0]
-            mu_k = X @ phi[k]
-            resid = y - mu_k
-            sigma[k] = max(np.sqrt(np.sum(w * resid ** 2) / np.sum(w)), 1e-6)
-            beta[k] = estimate_beta(resid, w, sigma_init=sigma[k])
-
-        pi = tau.mean(axis=0)
-        ll_new = np.sum(np.log(np.sum(np.exp(log_tau - log_tau_max), axis=1)) + log_tau_max.flatten())
-
-        if np.abs(ll_new - ll_old) < tol:
-            break
-        ll_old = ll_new
-
-    num_params = K * (p + 2) + (K - 1)
-    aic = -2 * ll_new + 2 * num_params
-    bic = -2 * ll_new + np.log(T_eff) * num_params
-
-    return {
-        'K': K, 'phi': phi, 'sigma': sigma, 'beta': beta, 'pi': pi,
-        'loglik': ll_new, 'AIC': aic, 'BIC': bic,
-        'tau': tau, 'X': X, 'y': y, 'dist': 'ged'
-    }
-
-def find_best_K_mar_ged(series, p, K_range, max_iter=100, tol=1e-6):
-    results = []
-    for K in K_range:
-        st.write(f"🔄 Estimasi MAR-GED untuk K={K}...")
-        model = em_mar_ged_manual(series, p, K, max_iter, tol)
-        results.append(model)
-
-    best_model = min(results, key=lambda x: x['BIC'])
-    df_bic = pd.DataFrame({
-        'K': [m['K'] for m in results],
-        'LogLik': [m['loglik'] for m in results],
-        'AIC': [m['AIC'] for m in results],
-        'BIC': [m['BIC'] for m in results]
-    })
-
-    return best_model, df_bic
-
-def predict_mar_normal(model, series, n_steps):
-    phi, pi, K, p = model['phi'], model['pi'], model['K'], model['phi'].shape[1]
-    history = list(series[-p:])
-    preds = []
-    for _ in range(n_steps):
-        pred = sum(pi[k] * np.dot(phi[k], history[-p:][::-1]) for k in range(K))
-        preds.append(pred)
-        history.append(pred)
-    return np.array(preds)
-
-def predict_mar_ged(model, series, n_steps):
-    return predict_mar_normal(model, series, n_steps)
-
-def compute_residuals_mar(model):
-    tau, X, y, phi = model['tau'], model['X'], model['y'], model['phi']
-    dominant = np.argmax(tau, axis=1)
-    residuals = y - np.array([X[t] @ phi[k] for t, k in enumerate(dominant)])
-    return residuals
-
-def test_residual_assumptions(model, lags=10):
-    residuals = compute_residuals_mar(model)
-    resid_std = (residuals - np.mean(residuals)) / np.std(residuals)
-    ks_stat, ks_pval = kstest(resid_std, 'norm')
-    lb_result = acorr_ljungbox(residuals, lags=lags, return_df=True)
-    result_df = pd.DataFrame({
-        'Test': ['Kolmogorov-Smirnov', 'Ljung-Box'],
-        'Statistic': [ks_stat, lb_result['lb_stat'].iloc[-1]],
-        'p-value': [ks_pval, lb_result['lb_pvalue'].iloc[-1]],
-        'H0': ['Residual ~ Normal', 'Tidak ada autokorelasi'],
-        'Keputusan': ['Tolak H0' if ks_pval < 0.05 else 'Gagal Tolak H0',
-                      'Tolak H0' if lb_result['lb_pvalue'].iloc[-1] < 0.05 else 'Gagal Tolak H0']
-    })
-    return result_df, residuals
-
-def convert_logreturn_to_price(last_price, log_returns):
-    prices = [last_price]
-    for r in log_returns:
-        prices.append(prices[-1] * np.exp(r))
-    return np.array(prices[1:])
-
-def compute_price_metrics(actual, pred):
-    mape = mean_absolute_percentage_error(actual, pred)
-    rmse = np.sqrt(mean_squared_error(actual, pred))
-    mae = mean_absolute_error(actual, pred)
-    return mape, rmse, mae
-
 
 # ----------------- Sidebar Navigasi -----------------
 st.sidebar.title("📊 Navigasi")
@@ -285,7 +74,7 @@ elif menu == "Input Data":
             st.dataframe(df.head())
         except Exception as e:
             st.error(f"Error: {e}")
-            
+
 # ----------------- Halaman Preprocessing -----------------
 elif menu == "Data Preprocessing":
     st.title("⚙️ Preprocessing Data")
@@ -335,7 +124,6 @@ elif menu == "Data Preprocessing":
     ax.legend()
     st.pyplot(fig)
 
-    
 # ----------------- Halaman Uji Stasioneritas -----------------
 elif menu == "Stasioneritas":
     st.title("📉 Uji Stasioneritas dan Diagnostik Distribusi")
@@ -397,7 +185,6 @@ elif menu == "Stasioneritas":
     ax.set_ylabel('Frekuensi')
     st.pyplot(fig)
 
-
 # ==================================== HALAMAN MODEL =======================================================
 elif menu == "Model":
 
@@ -450,7 +237,7 @@ elif menu == "Model":
                 st.success(f"✅ Model MAR-GED terbaik: K={best_model['K']} (BIC={best_model['BIC']:.2f})")
 
                 st.markdown("### 📊 Tabel BIC (MAR-GED)")
-                st.dataframe(df_bic.style.format(precision=2))
+                st.dataframe(df_bic.style.format({"LogLik": "{:.2f}", "AIC": "{:.2f}", "BIC": "{:.2f}"}))
 
                 # Parameter output
                 phi = best_model['phi']
@@ -498,13 +285,8 @@ elif menu == "Uji Signifikansi dan Residual":
 
         df_sig = test_significance_mar(model)
 
-    st.table(df_sig.style.format({
-        "Estimate": "{:.4f}", 
-        "Std.Err": "{:.4f}", 
-        "z-value": "{:.4f}", 
-        "p-value": "{:.4f}"
-    }))
-
+        st.dataframe(df_sig.style.format({"Estimate": "{:.4f}", "Std.Err": "{:.4f}", 
+                                          "z-value": "{:.4f}", "p-value": "{:.4f}"}))
 
     elif model_choice == "MAR-GED":
         st.markdown("##### Model: **MAR-GED**")
@@ -566,19 +348,6 @@ elif menu == "Uji Signifikansi dan Residual":
         sns.histplot(residuals, kde=True, bins=30, color='lightgreen', ax=ax)
         ax.set_title("Distribusi Residual MAR-GED")
         st.pyplot(fig)
-
-# ============================ FUNGSI KONVERSI DAN METRIK ============================
-def convert_logreturn_to_price(last_price, log_returns):
-    prices = [last_price]
-    for r in log_returns:
-        prices.append(prices[-1] * np.exp(r))
-    return np.array(prices[1:])
-
-def compute_price_metrics(actual, pred):
-    mape = mean_absolute_percentage_error(actual, pred)
-    rmse = np.sqrt(mean_squared_error(actual, pred))
-    mae = mean_absolute_error(actual, pred)
-    return mape, rmse, mae
 
 # ============================ HALAMAN PREDIKSI DAN VISUALISASI ============================
 
