@@ -322,8 +322,41 @@ def find_best_K_mar_ged(series, p, K_range, max_iter=100, tol=1e-6):
         'AIC': [m['AIC'] for m in results],
         'BIC': [m['BIC'] for m in results]
     })
+# Signifikan
+from scipy.stats import norm
+import pandas as pd
 
+def test_significance_ar_params_mar(X, y, phi, sigma, tau):
+    """
+    Uji signifikansi parameter AR untuk model MAR (Normal atau GED)
+    """
+    K, p = phi.shape
+    T = len(y)
+    result = []
 
+    for k in range(K):
+        idx_k = tau[:, k] > 1e-3  # Gunakan hanya jika komponen ini aktif
+        for j in range(p):
+            Xj = X[:, j]
+            nom = phi[k, j]
+            denom = np.sum(tau[:, k] * Xj**2)
+            if denom > 0:
+                se = np.sqrt(sigma[k]**2 / denom)
+                z = nom / se
+                p_value = 2 * (1 - norm.cdf(np.abs(z)))
+                result.append({
+                    'Komponen': k+1,
+                    'AR Index': f'phi_{j+1}',
+                    'Estimate': nom,
+                    'Std Error': se,
+                    'z-value': z,
+                    'p-value': p_value,
+                    'Signifikan': '✅' if p_value < 0.05 else '❌'
+                })
+
+    return pd.DataFrame(result)
+
+# FORECAST
 def forecast_mar(model, series, n_steps):
     """
     Prediksi n_steps ke depan untuk MAR-Normal atau MAR-GED.
