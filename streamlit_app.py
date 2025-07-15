@@ -19,7 +19,7 @@ from scipy.optimize import minimize
 from io import StringIO
 
 # === FUNGSI PENDUKUNG ===
-# === ESTIMASI BETA GED ===
+# === Fungsi Estimasi Beta GED ===
 def estimate_beta(residuals, weights, sigma_init=1.0):
     def neg_log_likelihood(beta):
         if beta <= 0:
@@ -31,8 +31,8 @@ def estimate_beta(residuals, weights, sigma_init=1.0):
     result = minimize(neg_log_likelihood, x0=np.array([2.0]), bounds=[(0.1, 10)])
     return result.x[0] if result.success else 2.0
 
-# === EM ALGORITHM UNTUK MAR-GED ===
-def em_mar_ged_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
+# === EM MAR-GED ===
+def em_mar_ged(series, p, K, max_iter=100, tol=1e-6, seed=42):
     np.random.seed(seed)
     n = len(series)
     y = series[p:]
@@ -96,14 +96,16 @@ def em_mar_ged_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
         'BIC': bic,
         'tau': tau,
         'X': X,
-        'y': y
+        'y': y,
+        'dist': 'ged'
     }
 
-# === GRID SEARCH UNTUK K TERTENTU ===
+
+# === Grid Search MAR-GED ===
 def find_best_K_mar_ged(series, p, K_range, max_iter=50, tol=1e-6):
     results = []
     for K in K_range:
-        model = em_mar_ged_manual(series, p, K, max_iter=max_iter, tol=tol)
+        model = em_mar_ged(series, p, K, max_iter=max_iter, tol=tol)
         results.append(model)
 
     best_model = min(results, key=lambda x: x['BIC'])
@@ -301,172 +303,103 @@ elif menu == "Model":
         K = st.sidebar.number_input("Jumlah Komponen (K)", min_value=2, max_value=6, value=2)
         max_iter = st.sidebar.slider("Maks Iterasi EM", min_value=50, max_value=500, value=100, step=10)
 
-        if st.button("🚀 Estimasi MAR‑GED"):
+        if st.button("🚀 Jalankan Estimasi MAR‑GED"):
             with st.spinner("Menjalankan estimasi EM MAR-GED..."):
                 model = em_mar_ged_manual(series, p=p, K=K, max_iter=max_iter)
-                
+
                 # Simpan ke session state
                 st.session_state['mar_ged_model'] = model
                 st.session_state['mar_ged_p'] = p
                 st.session_state['mar_ged_K'] = K
-                
-                # Sinkronisasi dengan halaman lain
-                st.session_state['best_model'] = model
                 st.session_state['model_choice'] = "MAR-GED"
-                
+                st.session_state['best_model'] = model
+
                 st.success("Estimasi MAR-GED selesai.")
 
-            # Tampilkan parameter hasil estimasi
+            # Tampilkan parameter
             with st.expander("📊 Lihat Parameter Model"):
+                param_df = pd.DataFrame(model['phi'], columns=[f"Lag {i+1}" for i in range(p)])
+                param_df.index = [f"Regime {i+1}" for i in range(K)]
                 st.write("**Phi (Koefisien AR):**")
-                st.write(pd.DataFrame(model['phi'], columns=[f"Lag {i+1}" for i in range(model['phi'].shape[1])]))
+                st.dataframe(param_df)
 
-                st.write("**Sigma:**", model['sigma'])
-                st.write("**Beta (GED Shape):**", model['beta'])
-                st.write("**Pi (Proporsi Komponen):**", model['pi'])
+                st.write("**Sigma:**", np.round(model['sigma'], 4))
+                st.write("**Beta (GED Shape):**", np.round(model['beta'], 4))
+                st.write("**Pi (Proporsi Regime):**", np.round(model['pi'], 4))
                 st.write(f"**Log-Likelihood:** {model['loglik']:.4f}")
                 st.write(f"**AIC:** {model['AIC']:.4f}")
                 st.write(f"**BIC:** {model['BIC']:.4f}")
 
     else:  # Mode Cari Otomatis
-        p_max = st.sidebar.number_input("p Maks", min_value=1, max_value=10, value=5)
-        K_range = range(2, 6)
+        p_max = st.sidebar.number_input("p Maksimal", min_value=1, max_value=10, value=5)
+        K_range = list(range(2, 6))
         max_iter = st.sidebar.slider("Maks Iterasi EM", min_value=50, max_value=500, value=100, step=10)
 
-        if st.button("🔍 Cari p & K Terbaik"):
+        if st.button("🔍 Cari Struktur p & K Terbaik"):
             with st.spinner("Menjalankan pencarian grid MAR-GED..."):
                 best_bic = np.inf
                 best_model = None
                 best_p = None
-                summary_list = []
+                grid_results = []
 
-                for p in range(1, p_max+1):
+                for p_try in range(1, p_max+1):
                     try:
-                        model, summary = find_best_K_mar_ged(series, p=p, K_range=K_range, max_iter=max_iter)
-                        summary['p'] = p
-                        summary_list.append(summary)
+                        model, df_grid = find_best_K_mar_ged(series, p=p_try, K_range=K_range, max_iter=max_iter)
+                        df_grid['p'] = p_try
+                        grid_results.append(df_grid)
 
                         if model['BIC'] < best_bic:
                             best_bic = model['BIC']
                             best_model = model
-                            best_p = p
+                            best_p = p_try
                     except Exception as e:
-                        st.warning(f"Gagal untuk p={p}: {e}")
+                        st.warning(f"Gagal estimasi untuk p={p_try}: {e}")
 
                 if best_model:
                     st.session_state['mar_ged_model'] = best_model
                     st.session_state['mar_ged_p'] = best_p
                     st.session_state['mar_ged_K'] = best_model['K']
-
-                    # Sinkronisasi dengan halaman lain
-                    st.session_state['best_model'] = best_model
                     st.session_state['model_choice'] = "MAR-GED"
+                    st.session_state['best_model'] = best_model
 
-                    st.success(f"Model terbaik ditemukan: p={best_p}, K={best_model['K']}, BIC={best_model['BIC']:.2f}")
+                    st.success(f"Model terbaik: p={best_p}, K={best_model['K']}, BIC={best_model['BIC']:.2f}")
 
-                    with st.expander("📊 Lihat Parameter Model"):
+                    with st.expander("📊 Lihat Parameter Model Terbaik"):
+                        param_df = pd.DataFrame(best_model['phi'], columns=[f"Lag {i+1}" for i in range(best_model['phi'].shape[1])])
+                        param_df.index = [f"Regime {i+1}" for i in range(best_model['K'])]
                         st.write("**Phi (Koefisien AR):**")
-                        st.write(pd.DataFrame(best_model['phi'], columns=[f"Lag {i+1}" for i in range(best_model['phi'].shape[1])]))
+                        st.dataframe(param_df)
 
-                        st.write("**Sigma:**", best_model['sigma'])
-                        st.write("**Beta (GED Shape):**", best_model['beta'])
-                        st.write("**Pi (Proporsi Komponen):**", best_model['pi'])
+                        st.write("**Sigma:**", np.round(best_model['sigma'], 4))
+                        st.write("**Beta (GED Shape):**", np.round(best_model['beta'], 4))
+                        st.write("**Pi (Proporsi Regime):**", np.round(best_model['pi'], 4))
                         st.write(f"**Log-Likelihood:** {best_model['loglik']:.4f}")
                         st.write(f"**AIC:** {best_model['AIC']:.4f}")
                         st.write(f"**BIC:** {best_model['BIC']:.4f}")
 
-                    # Tampilkan tabel BIC untuk semua p dan K
-                    if len(summary_list) > 0:
-                        summary_all = pd.concat(summary_list, ignore_index=True)
-                        st.write("### 📈 Ringkasan BIC Grid Search")
-                        st.dataframe(summary_all.pivot(index='K', columns='p', values='BIC').style.format("{:.2f}"))
+                    # Tampilkan tabel BIC grid search
+                    st.write("### 🗂️ Ringkasan BIC Grid Search")
+                    all_results = pd.concat(grid_results, ignore_index=True)
+                    st.dataframe(all_results.pivot(index='K', columns='p', values='BIC').style.format("{:.2f}"))
                 else:
-                    st.error("Gagal menemukan model yang konvergen.")
+                    st.error("Tidak ada model yang konvergen pada grid pencarian.")
 
 
 # ======================================== UJI SIGNIFIKANSI DAN RESIDUAL =======================================
 elif menu == "Uji Signifikansi dan Residual":
 
-    st.title("🧪 Uji Signifikansi Parameter & Diagnostik Residual")
+    st.title("🧪 Uji Signifikansi Parameter & Diagnostik Residual MAR-GED")
 
     if 'best_model' not in st.session_state:
-        st.warning("Lakukan pemodelan terlebih dahulu di menu 'Model'.")
+        st.warning("Lakukan estimasi MAR-GED terlebih dahulu di menu 'Model'.")
         st.stop()
 
     model = st.session_state['best_model']
-    model_choice = st.session_state['model_choice']
 
-    st.header("📌 Uji Signifikansi Parameter")
+    st.header("📌 Uji Signifikansi Koefisien AR")
 
-    # Fungsi uji signifikansi MAR-Normal
-    def test_significance_mar(result):
-        from scipy.stats import norm
-
-        phi = result['phi']         # (K x p)
-        sigma = result['sigma']     # (K,)
-        pi = result['pi']           # (K,)
-        tau = result['tau']         # (T x K)
-        X = result['X']             # (T x p)
-        y = result['y']             # (T,)
-        T_eff = len(y)
-
-        K, p = phi.shape
-        sig_results = []
-
-        for k in range(K):
-            r_k = tau[:, k]
-            W = np.diag(r_k)
-
-            try:
-                XtWX = X.T @ W @ X
-                XtWX += 1e-6 * np.eye(p)
-                cov_phi = sigma[k]**2 * np.linalg.inv(XtWX)
-                se_phi = np.sqrt(np.diag(cov_phi))
-            except np.linalg.LinAlgError:
-                se_phi = np.full(p, np.nan)
-
-            z_phi = phi[k] / se_phi
-            pval_phi = 2 * (1 - norm.cdf(np.abs(z_phi)))
-
-            se_sigma = sigma[k] / np.sqrt(2 * np.sum(r_k))
-            z_sigma = sigma[k] / se_sigma
-            pval_sigma = 2 * (1 - norm.cdf(np.abs(z_sigma)))
-
-            se_pi = np.sqrt(pi[k] * (1 - pi[k]) / T_eff)
-            z_pi = pi[k] / se_pi
-            pval_pi = 2 * (1 - norm.cdf(np.abs(z_pi)))
-
-            for j in range(p):
-                sig_results.append({
-                    'Komponen': k + 1,
-                    'Parameter': f'phi_{j+1}',
-                    'Estimate': phi[k, j],
-                    'Std.Err': se_phi[j],
-                    'z-value': z_phi[j],
-                    'p-value': pval_phi[j]
-                })
-
-            sig_results.append({
-                'Komponen': k + 1,
-                'Parameter': 'sigma',
-                'Estimate': sigma[k],
-                'Std.Err': se_sigma,
-                'z-value': z_sigma,
-                'p-value': pval_sigma
-            })
-            sig_results.append({
-                'Komponen': k + 1,
-                'Parameter': 'pi',
-                'Estimate': pi[k],
-                'Std.Err': se_pi,
-                'z-value': z_pi,
-                'p-value': pval_pi
-            })
-
-        return pd.DataFrame(sig_results)
-
-    # Fungsi uji signifikansi MAR-GED (AR params saja)
-    def test_significance_ar_params_mar(X, y, phi, sigma, tau):
+    # Fungsi uji signifikansi AR params MAR-GED (GED: hanya AR yang diuji)
+    def test_significance_ar_params_mar_ged(X, y, phi, sigma, tau):
         from scipy.stats import norm
 
         K, p = phi.shape
@@ -482,9 +415,9 @@ elif menu == "Uji Signifikansi dan Residual":
                     p_value = 2 * (1 - norm.cdf(np.abs(z)))
                     result.append({
                         'Komponen': k + 1,
-                        'AR Index': f'phi_{j+1}',
+                        'Parameter': f'phi_{j+1}',
                         'Estimate': nom,
-                        'Std Error': se,
+                        'Std.Error': se,
                         'z-value': z,
                         'p-value': p_value,
                         'Signifikan': '✅' if p_value < 0.05 else '❌'
@@ -492,54 +425,28 @@ elif menu == "Uji Signifikansi dan Residual":
 
         return pd.DataFrame(result)
 
-    # Fungsi hitung residual MAR-Normal
-    def compute_mar_residuals(result):
-        import numpy as np
+    # Hitung uji signifikansi
+    df_sig = test_significance_ar_params_mar_ged(
+        model['X'], model['y'], model['phi'], model['sigma'], model['tau']
+    )
 
-        tau = result['tau']         # (T x K)
-        X = result['X']             # (T x p)
-        y = result['y']             # (T,)
-        phi = result['phi']         # (K x p)
+    st.dataframe(df_sig.style.format({
+        "Estimate": "{:.4f}",
+        "Std.Error": "{:.4f}",
+        "z-value": "{:.4f}",
+        "p-value": "{:.4f}"
+    }))
 
-        dominant_comp = np.argmax(tau, axis=1)
-        residuals = np.zeros(len(y))
+    st.markdown("""
+    **Interpretasi:**  
+    - p-value < 0.05 → **Signifikan**  
+    - p-value ≥ 0.05 → **Tidak signifikan**
+    """)
 
-        for t in range(len(y)):
-            k = dominant_comp[t]
-            residuals[t] = y[t] - X[t] @ phi[k]
-
-        return residuals
-
-    # Fungsi uji residual MAR-Normal
-    def test_residual_assumptions(result, lags=10, alpha=0.05):
-        from scipy.stats import kstest
-        from statsmodels.stats.diagnostic import acorr_ljungbox
-
-        residuals = compute_mar_residuals(result)
-        resid_std = (residuals - np.mean(residuals)) / np.std(residuals)
-
-        ks_stat, ks_pvalue = kstest(resid_std, 'norm')
-        ks_decision = 'Tolak H0 (Tidak Normal)' if ks_pvalue < alpha else 'Gagal Tolak H0 (Normal)'
-
-        lb_result = acorr_ljungbox(residuals, lags=lags, return_df=True)
-        lb_stat = lb_result['lb_stat'].values[-1]
-        lb_pvalue = lb_result['lb_pvalue'].values[-1]
-        lb_decision = 'Tolak H0 (Ada Autokorelasi)' if lb_pvalue < alpha else 'Gagal Tolak H0 (Tidak Ada Autokorelasi)'
-
-        result_summary = pd.DataFrame({
-            'Test': ['Kolmogorov-Smirnov', 'Ljung-Box'],
-            'Statistic': [ks_stat, lb_stat],
-            'p-value': [ks_pvalue, lb_pvalue],
-            'Hipotesis Nol (H0)': ['Residual mengikuti distribusi normal', 'Tidak ada autokorelasi residual'],
-            'Keputusan': [ks_decision, lb_decision]
-        })
-
-        return result_summary, residuals
+    st.header("📊 Diagnostik Residual MAR-GED")
 
     # Fungsi hitung residual MAR-GED
-    def compute_residuals_mar(model):
-        import numpy as np
-
+    def compute_residuals_mar_ged(model):
         tau = model['tau']
         X = model['X']
         y = model['y']
@@ -555,11 +462,11 @@ elif menu == "Uji Signifikansi dan Residual":
         return residuals
 
     # Fungsi uji residual MAR-GED
-    def test_residual_assumptions_mar(model, lags=10):
+    def test_residual_assumptions_mar_ged(model, lags=10):
         from scipy.stats import kstest
         from statsmodels.stats.diagnostic import acorr_ljungbox
 
-        residuals = compute_residuals_mar(model)
+        residuals = compute_residuals_mar_ged(model)
         residuals_std = (residuals - np.mean(residuals)) / np.std(residuals)
 
         ks_stat, ks_pval = kstest(residuals_std, 'norm')
@@ -572,76 +479,43 @@ elif menu == "Uji Signifikansi dan Residual":
             'Test': ['Kolmogorov-Smirnov', 'Ljung-Box'],
             'Statistic': [ks_stat, lb_stat],
             'p-value': [ks_pval, lb_pval],
-            'Hipotesis Nol (H0)': ['Residual mengikuti distribusi normal',
-                                   'Tidak ada autokorelasi residual'],
-            'Keputusan': ['Tolak H0 (Tidak Normal)' if ks_pval < 0.05 else 'Gagal Tolak H0 (Normal)',
-                          'Tolak H0 (Ada Autokorelasi)' if lb_pval < 0.05 else 'Gagal Tolak H0 (Tidak Ada Autokorelasi)']
+            'Hipotesis Nol (H0)': [
+                'Residual mengikuti distribusi normal',
+                'Tidak ada autokorelasi residual'
+            ],
+            'Keputusan': [
+                'Tolak H0 (Tidak Normal)' if ks_pval < 0.05 else 'Gagal Tolak H0 (Normal)',
+                'Tolak H0 (Ada Autokorelasi)' if lb_pval < 0.05 else 'Gagal Tolak H0 (Tidak Ada Autokorelasi)'
+            ]
         })
 
         return result, residuals
 
-    if model_choice == "MAR-Normal":
-        st.markdown("##### Model: **MAR-Normal**")
-        df_sig = test_significance_mar(model)
-        st.dataframe(df_sig.style.format({
-            "Estimate": "{:.4f}",
-            "Std.Err": "{:.4f}",
-            "z-value": "{:.4f}",
-            "p-value": "{:.4f}"
-        }))
-    else:
-        st.markdown("##### Model: **MAR-GED**")
-        df_sig = test_significance_ar_params_mar(
-            model['X'], model['y'], model['phi'], model['sigma'], model['tau'])
-        st.dataframe(df_sig.style.format({
-            "Estimate": "{:.4f}",
-            "Std Error": "{:.4f}",
-            "z-value": "{:.4f}",
-            "p-value": "{:.4f}"
-        }))
+    # Jalankan uji residual
+    result_summary, residuals = test_residual_assumptions_mar_ged(model)
+    st.dataframe(result_summary.style.format({"Statistic": "{:.4f}", "p-value": "{:.4f}"}))
 
-    st.markdown("""
-    **Interpretasi:**  
-    - p-value < 0.05 → **Signifikan**  
-    - p-value ≥ 0.05 → **Tidak signifikan**
-    """)
+    # Visualisasi residual
+    st.subheader("Visualisasi Residual (Komponen Dominan)")
 
-    st.header("📊 Diagnostik Residual")
+    import matplotlib.pyplot as plt
 
-    if model_choice == "MAR-Normal":
-        st.markdown("##### Residual (Komponen Dominan) - MAR-Normal")
-        result_summary, residuals = test_residual_assumptions(model)
-        st.dataframe(result_summary.style.format({"Statistic": "{:.4f}", "p-value": "{:.4f}"}))
-    else:
-        st.markdown("##### Residual (Komponen Dominan) - MAR-GED")
-        result_summary, residuals = test_residual_assumptions_mar(model)
-        st.dataframe(result_summary.style.format({"Statistic": "{:.4f}", "p-value": "{:.4f}"}))
+    fig, ax = plt.subplots(figsize=(10,4))
+    ax.plot(residuals, label="Residual MAR-GED", color="tab:blue")
+    ax.axhline(0, color='gray', linestyle='--', linewidth=1)
+    ax.set_title("Plot Residual MAR-GED")
+    ax.set_xlabel("Waktu")
+    ax.set_ylabel("Residual")
+    ax.legend()
+    st.pyplot(fig)
+
 
 # ------------------------------- PREDIKSI DAN VISUALISASI ---------------------------------------------
 elif menu == "Prediksi dan Visualisasi":
-    st.header("🔮 Prediksi Harga Saham dengan Model MAR")
+    st.header("🔮 Prediksi Harga Saham dengan Model MAR-GED")
 
-    # Fungsi prediksi MAR Normal (komponen dominan)
-    def predict_mar_normal(model, X_init, n_steps=30):
-        phi = model['phi']
-        pi = model['pi']
-        p = phi.shape[1]
-        main_k = np.argmax(pi)
-        phi_main = phi[main_k]
-        preds = []
-        X_curr = list(X_init[-p:])
-        for _ in range(n_steps):
-            x_lag = np.array(X_curr[-p:])[::-1]
-            next_val = np.dot(phi_main, x_lag)
-            preds.append(next_val)
-            X_curr.append(next_val)
-        return np.array(preds)
-
-    # Fungsi prediksi MAR GED (komponen dominan)
+    # Fungsi prediksi MAR-GED (rata-rata mixture)
     def predict_mar_ged(model, X_init, n_steps=30):
-        """
-        Prediksi MAR-GED dengan rata-rata mixture (bukan komponen dominan).
-        """
         phi = model['phi']
         pi = model['pi']
         p = phi.shape[1]
@@ -649,19 +523,19 @@ elif menu == "Prediksi dan Visualisasi":
         preds = []
         X_curr = list(X_init[-p:])  # Inisialisasi dengan lag terakhir
 
-    for _ in range(n_steps):
-        x_lag = np.array(X_curr[-p:])[::-1]  # Urutan lag terbaru duluan
+        for _ in range(n_steps):
+            x_lag = np.array(X_curr[-p:])[::-1]  # Urutan lag terbaru duluan
 
-        # Hitung prediksi sebagai rata-rata mixture dari komponen
-        next_val = 0.0
-        for k in range(model['K']):
-            mu_k = np.dot(phi[k], x_lag)
-            next_val += pi[k] * mu_k
+            # Hitung prediksi sebagai rata-rata mixture dari komponen
+            next_val = 0.0
+            for k in range(model['K']):
+                mu_k = np.dot(phi[k], x_lag)
+                next_val += pi[k] * mu_k
 
-        preds.append(next_val)
-        X_curr.append(next_val)  # Tambahkan prediksi sebagai lag baru
+            preds.append(next_val)
+            X_curr.append(next_val)  # Tambahkan prediksi sebagai lag baru
 
-    return np.array(preds)
+        return np.array(preds)
 
     # Validasi dan ambil data
     required_keys = ['log_return_train', 'df', 'best_model', 'harga_col']
@@ -672,7 +546,7 @@ elif menu == "Prediksi dan Visualisasi":
 
     log_return_train = st.session_state['log_return_train']
     df = st.session_state['df']
-    best_model = st.session_state['best_model']
+    model = st.session_state['best_model']
     harga_col = st.session_state['harga_col']
 
     st.markdown(f"📌 **Saham yang Dipilih:** {harga_col}")
@@ -684,17 +558,8 @@ elif menu == "Prediksi dan Visualisasi":
 
     if st.button("▶️ Prediksi"):
         X_init = log_return_train[matched_col].dropna().values
-        model = best_model
 
-        dist = model.get('dist', 'normal').lower()
-
-        if dist == 'normal':
-            preds_log = predict_mar_normal(model, X_init, n_steps=n_steps)
-        elif dist == 'ged':
-            preds_log = predict_mar_ged(model, X_init, n_steps=n_steps)
-        else:
-            st.error(f"❌ Distribusi model '{dist}' tidak dikenali atau fungsi prediksi belum tersedia.")
-            st.stop()
+        preds_log = predict_mar_ged(model, X_init, n_steps=n_steps)
 
         st.success(f"✅ Prediksi {n_steps} hari ke depan untuk {matched_col} selesai.")
 
@@ -729,8 +594,8 @@ elif menu == "Prediksi dan Visualisasi":
             harga_hist = df[harga_col].dropna() if harga_col in df.columns else df.iloc[:, 1].dropna()
             ax.plot(harga_hist.index, harga_hist.values, label='Harga Historis', color='blue')
             future_idx = np.arange(harga_hist.index[-1] + 1, harga_hist.index[-1] + n_steps + 1)
-            ax.plot(future_idx, preds_price, label='Harga Prediksi', linestyle='--', color='orange')
-            ax.set_title(f"📈 Prediksi Harga Saham {harga_col}")
+            ax.plot(future_idx, preds_price, label='Harga Prediksi MAR-GED', linestyle='--', color='orange')
+            ax.set_title(f"📈 Prediksi Harga Saham {harga_col} dengan MAR-GED")
             ax.set_xlabel("Hari")
             ax.set_ylabel("Harga (Rupiah)")
             ax.legend()
@@ -747,12 +612,13 @@ elif menu == "Prediksi dan Visualisasi":
             fig, ax = plt.subplots(figsize=(12, 5))
             ax.plot(np.arange(len(X_init)), X_init, label='Log-Return Historis', color='green')
             future_idx = np.arange(len(X_init), len(X_init) + n_steps)
-            ax.plot(future_idx, preds_log, label='Log-Return Prediksi', linestyle='--', color='red')
-            ax.set_title(f"📈 Prediksi Log-Return Saham {harga_col}")
+            ax.plot(future_idx, preds_log, label='Log-Return Prediksi MAR-GED', linestyle='--', color='red')
+            ax.set_title(f"📈 Prediksi Log-Return Saham {harga_col} dengan MAR-GED")
             ax.set_xlabel("Hari")
             ax.set_ylabel("Log-Return")
             ax.legend()
             st.pyplot(fig)
+
 # ========================================= INTERPRETASI DAN SARAN ===========================================================
 elif menu == "Interpretasi dan Saran":
 
