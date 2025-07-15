@@ -570,7 +570,7 @@ elif menu == "Prediksi dan Visualisasi":
     if st.button("▶️ Prediksi"):
         X_init = log_return_train[matched_col].dropna().values
 
-        preds_log = predict_mar_ged(model, X_init, n_steps=n_steps)
+        preds_log = predict_mar_ged_streamlit(model, X_init, n_steps=n_steps)
 
         st.success(f"✅ Prediksi {n_steps} hari ke depan untuk {matched_col} selesai.")
 
@@ -642,7 +642,7 @@ elif menu == "Interpretasi dan Saran":
     model = st.session_state['best_model']
     model_choice = st.session_state['model_choice']
     p = st.session_state.get('best_p', 1)
-    K = st.session_state.get('best_k', model['K'])
+    K = st.session_state.get('mar_ged_k', model['K'])
 
     st.markdown(f"### Model Terpilih: {model_choice} dengan K={K} komponen dan orde AR(p)={p}")
 
