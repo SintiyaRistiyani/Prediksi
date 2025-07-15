@@ -14,7 +14,6 @@ from sklearn.metrics import mean_absolute_percentage_error
 from scipy.stats import skew, kurtosis, shapiro, jarque_bera
 from numpy.linalg import LinAlgError
 from scipy.optimize import minimize
-from numpy.linalg import LinAlgError
 
 # Utility
 from io import StringIO
