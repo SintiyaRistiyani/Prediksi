@@ -599,27 +599,30 @@ elif menu == "Prediksi dan Visualisasi":
         return np.array(preds)
 
     # Fungsi prediksi MAR GED (komponen dominan)
-    def predict_mar_ged(model, X_init, n_steps=30, seed=42):
-        from scipy.stats import gennorm
+    def predict_mar_ged(model, X_init, n_steps=30):
+        """
+        Prediksi MAR-GED dengan rata-rata mixture (bukan komponen dominan).
+        """
         phi = model['phi']
         pi = model['pi']
-        sigma = model['sigma']
-        beta = model['beta']
         p = phi.shape[1]
-        main_comp = np.argmax(pi)
-        phi_main = phi[main_comp]
-        sigma_main = sigma[main_comp]
-        beta_main = beta[main_comp]
-        np.random.seed(seed)
+    
         preds = []
-        X_curr = list(X_init[-p:])
-        for _ in range(n_steps):
-            next_val = np.dot(phi_main, X_curr[-p:][::-1])
-            noise = gennorm.rvs(beta_main, loc=0, scale=sigma_main)
-            next_val += noise
-            preds.append(next_val)
-            X_curr.append(next_val)
-        return np.array(preds)
+        X_curr = list(X_init[-p:])  # Inisialisasi dengan lag terakhir
+
+    for _ in range(n_steps):
+        x_lag = np.array(X_curr[-p:])[::-1]  # Urutan lag terbaru duluan
+
+        # Hitung prediksi sebagai rata-rata mixture dari komponen
+        next_val = 0.0
+        for k in range(model['K']):
+            mu_k = np.dot(phi[k], x_lag)
+            next_val += pi[k] * mu_k
+
+        preds.append(next_val)
+        X_curr.append(next_val)  # Tambahkan prediksi sebagai lag baru
+
+    return np.array(preds)
 
     # Validasi dan ambil data
     required_keys = ['log_return_train', 'df', 'best_model', 'harga_col']
