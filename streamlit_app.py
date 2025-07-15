@@ -203,6 +203,9 @@ elif menu == "Model":
                 st.session_state['mar_ged_p'] = p
                 st.session_state['mar_ged_K'] = K
                 st.success("Estimasi selesai.")
+                 # Sinkronisasi dengan halaman lain
+                st.session_state['best_model'] = model
+                st.session_state['model_choice'] = "MAR-GED"
 
         if 'mar_ged_model' in st.session_state:
             show_mar_ged_params(st.session_state['mar_ged_model'])
