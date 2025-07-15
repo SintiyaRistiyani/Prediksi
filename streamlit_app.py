@@ -565,7 +565,6 @@ elif menu == "Prediksi dan Visualisasi":
     matched_col = 'Log Return'
 
     n_steps = st.number_input("📅 Masukkan Jumlah Hari Prediksi:", min_value=1, max_value=90, value=30)
-    show_as = st.radio("📊 Tampilkan Hasil Sebagai:", ['Log-Return', 'Harga'])
 
     if st.button("▶️ Prediksi Log-Return"):
         X_init = log_return_train[matched_col].dropna().values
