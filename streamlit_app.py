@@ -176,7 +176,7 @@ elif menu == "Stasioneritas":
     ax.set_ylabel('Log Return')
     ax.grid(True)
     st.pyplot(fig)
-    
+
 # ---------------------------------- Halaman Model (MAR‑GED) -----------------------------------------------
 elif menu == "Model":
     st.title("⚙️ Estimasi Model MAR‑GED")
