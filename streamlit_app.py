@@ -102,7 +102,7 @@ def em_mar_ged(series, p, K, max_iter=100, tol=1e-6, seed=42):
 
 
 # === Grid Search MAR-GED ===
-def find_best_K_mar_ged(series, p, K_range, max_iter=50, tol=1e-6):
+def find_best_K_mar_ged(series, p, K_range, max_iter=100, tol=1e-6):
     results = []
     for K in K_range:
         model = em_mar_ged(series, p, K, max_iter=max_iter, tol=tol)
@@ -333,7 +333,7 @@ elif menu == "Model":
     else:  # Mode Cari Otomatis
         p_max = st.sidebar.number_input("p Maksimal", min_value=1, max_value=10, value=5)
         K_range = list(range(2, 6))
-        max_iter = st.sidebar.slider("Maks Iterasi EM", min_value=50, max_value=500, value=100, step=10)
+        max_iter = st.sidebar.slider("Maks Iterasi EM", min_value=50, max_value=150, value=100, step=10)
 
         if st.button("🔍 Cari Struktur p & K Terbaik"):
             with st.spinner("Menjalankan pencarian grid MAR-GED..."):
