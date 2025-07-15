@@ -567,68 +567,31 @@ elif menu == "Prediksi dan Visualisasi":
     n_steps = st.number_input("📅 Masukkan Jumlah Hari Prediksi:", min_value=1, max_value=90, value=30)
     show_as = st.radio("📊 Tampilkan Hasil Sebagai:", ['Log-Return', 'Harga'])
 
-    if st.button("▶️ Prediksi"):
+    if st.button("▶️ Prediksi Log-Return"):
         X_init = log_return_train[matched_col].dropna().values
 
         preds_log = predict_mar_ged_streamlit(model, X_init, n_steps=n_steps)
 
         st.success(f"✅ Prediksi {n_steps} hari ke depan untuk {matched_col} selesai.")
 
-        if show_as == 'Harga':
-            if harga_col in df.columns:
-                last_price = df.loc[df.index[-1], harga_col]
-            else:
-                all_harga_cols = [col for col in df.columns if col != 'Date']
-                if len(all_harga_cols) > 0:
-                    last_price = df.loc[df.index[-1], all_harga_cols[0]]
-                    st.warning(f"⚠️ Kolom harga '{harga_col}' tidak ditemukan di df. Menggunakan kolom {all_harga_cols[0]} sebagai harga terakhir.")
-                else:
-                    st.error("❌ Tidak ada kolom harga yang tersedia di df.")
-                    st.stop()
+        # Tampilkan tabel prediksi log-return
+        df_pred = pd.DataFrame({
+            'Hari ke': np.arange(1, n_steps + 1),
+            'Log-Return Prediksi': preds_log
+        })
+        st.write(f"### 📋 Tabel Prediksi Log-Return Saham {harga_col}")
+        st.dataframe(df_pred.style.format({"Log-Return Prediksi": "{:.6f}"}))
 
-            def convert_logreturn_to_price(last_price, logreturns):
-                prices = [last_price]
-                for r in logreturns:
-                    prices.append(prices[-1] * np.exp(r))
-                return np.array(prices[1:])
-
-            preds_price = convert_logreturn_to_price(last_price, preds_log)
-
-            df_pred = pd.DataFrame({
-                'Hari ke': np.arange(1, n_steps + 1),
-                'Harga Prediksi': preds_price
-            })
-            st.write(f"### 📋 Tabel Prediksi Harga Saham {harga_col}")
-            st.dataframe(df_pred.style.format({"Harga Prediksi": "Rp {:,.2f}".format}))
-
-            fig, ax = plt.subplots(figsize=(12, 5))
-            harga_hist = df[harga_col].dropna() if harga_col in df.columns else df.iloc[:, 1].dropna()
-            ax.plot(harga_hist.index, harga_hist.values, label='Harga Historis', color='blue')
-            future_idx = np.arange(harga_hist.index[-1] + 1, harga_hist.index[-1] + n_steps + 1)
-            ax.plot(future_idx, preds_price, label='Harga Prediksi MAR-GED', linestyle='--', color='orange')
-            ax.set_title(f"📈 Prediksi Harga Saham {harga_col} dengan MAR-GED")
-            ax.set_xlabel("Hari")
-            ax.set_ylabel("Harga (Rupiah)")
-            ax.legend()
-            st.pyplot(fig)
-
-        else:  # show_as == 'Log-Return'
-            df_pred = pd.DataFrame({
-                'Hari ke': np.arange(1, n_steps + 1),
-                'Log-Return Prediksi': preds_log
-            })
-            st.write(f"### 📋 Tabel Prediksi Log-Return Saham {harga_col}")
-            st.dataframe(df_pred.style.format({"Log-Return Prediksi": "{:.6f}"}))
-
-            fig, ax = plt.subplots(figsize=(12, 5))
-            ax.plot(np.arange(len(X_init)), X_init, label='Log-Return Historis', color='green')
-            future_idx = np.arange(len(X_init), len(X_init) + n_steps)
-            ax.plot(future_idx, preds_log, label='Log-Return Prediksi MAR-GED', linestyle='--', color='red')
-            ax.set_title(f"📈 Prediksi Log-Return Saham {harga_col} dengan MAR-GED")
-            ax.set_xlabel("Hari")
-            ax.set_ylabel("Log-Return")
-            ax.legend()
-            st.pyplot(fig)
+        # Plot log-return prediksi vs historis
+        fig, ax = plt.subplots(figsize=(12, 5))
+        ax.plot(np.arange(len(X_init)), X_init, label='Log-Return Historis', color='green')
+        future_idx = np.arange(len(X_init), len(X_init) + n_steps)
+        ax.plot(future_idx, preds_log, label='Log-Return Prediksi MAR-GED', linestyle='--', color='red')
+        ax.set_title(f"📈 Prediksi Log-Return Saham {harga_col} dengan MAR-GED")
+        ax.set_xlabel("Hari")
+        ax.set_ylabel("Log-Return")
+        ax.legend()
+        st.pyplot(fig)
 
 # ========================================= INTERPRETASI DAN SARAN ===========================================================
 elif menu == "Interpretasi dan Saran":
