@@ -101,7 +101,7 @@ def em_mar_ged_manual(series, p, K, max_iter=100, tol=1e-6, seed=42):
     }
 
 # === GRID SEARCH UNTUK K TERTENTU ===
-def find_best_K_mar_ged(series, p, K_range, max_iter=100, tol=1e-6):
+def find_best_K_mar_ged(series, p, K_range, max_iter=50, tol=1e-6):
     results = []
     for K in K_range:
         model = em_mar_ged_manual(series, p, K, max_iter=max_iter, tol=tol)
@@ -300,7 +300,7 @@ elif menu == "Model":
     if mode == "Manual":
         p = st.sidebar.number_input("Ordo AR (p)", min_value=1, max_value=10, value=2)
         K = st.sidebar.number_input("Jumlah Komponen (K)", min_value=2, max_value=6, value=2)
-        max_iter = st.sidebar.slider("Maks Iterasi EM", 50, 500, 200, 50)
+        max_iter = st.sidebar.slider("Maks Iterasi EM", 50)
 
         if st.button("🚀 Estimasi MAR‑GED"):
             with st.spinner("Menjalankan estimasi EM..."):
@@ -319,7 +319,7 @@ elif menu == "Model":
     else:
         p_max = st.sidebar.number_input("p Maks", min_value=1, max_value=10, value=5)
         K_range = range(2, 6)
-        max_iter = st.sidebar.slider("Maks Iterasi EM", 50, 500, 200, 50)
+        max_iter = st.sidebar.slider("Maks Iterasi EM", 50)
 
         if st.button("🔍 Cari p & K Terbaik"):
             with st.spinner("Menjalankan pencarian grid..."):
