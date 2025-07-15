@@ -300,47 +300,87 @@ elif menu == "Model":
     if mode == "Manual":
         p = st.sidebar.number_input("Ordo AR (p)", min_value=1, max_value=10, value=2)
         K = st.sidebar.number_input("Jumlah Komponen (K)", min_value=2, max_value=6, value=2)
-        max_iter = st.sidebar.slider("Maks Iterasi EM", 50)
+        max_iter = st.sidebar.slider("Maks Iterasi EM", min_value=50, max_value=500, value=100, step=10)
 
         if st.button("🚀 Estimasi MAR‑GED"):
-            with st.spinner("Menjalankan estimasi EM..."):
+            with st.spinner("Menjalankan estimasi EM MAR-GED..."):
                 model = em_mar_ged_manual(series, p=p, K=K, max_iter=max_iter)
+                
+                # Simpan ke session state
                 st.session_state['mar_ged_model'] = model
                 st.session_state['mar_ged_p'] = p
                 st.session_state['mar_ged_K'] = K
-                st.success("Estimasi selesai.")
-                 # Sinkronisasi dengan halaman lain
+                
+                # Sinkronisasi dengan halaman lain
                 st.session_state['best_model'] = model
                 st.session_state['model_choice'] = "MAR-GED"
+                
+                st.success("Estimasi MAR-GED selesai.")
 
-        if 'mar_ged_model' in st.session_state:
-            show_mar_ged_params(st.session_state['mar_ged_model'])
+            # Tampilkan parameter hasil estimasi
+            with st.expander("📊 Lihat Parameter Model"):
+                st.write("**Phi (Koefisien AR):**")
+                st.write(pd.DataFrame(model['phi'], columns=[f"Lag {i+1}" for i in range(model['phi'].shape[1])]))
 
-    else:
+                st.write("**Sigma:**", model['sigma'])
+                st.write("**Beta (GED Shape):**", model['beta'])
+                st.write("**Pi (Proporsi Komponen):**", model['pi'])
+                st.write(f"**Log-Likelihood:** {model['loglik']:.4f}")
+                st.write(f"**AIC:** {model['AIC']:.4f}")
+                st.write(f"**BIC:** {model['BIC']:.4f}")
+
+    else:  # Mode Cari Otomatis
         p_max = st.sidebar.number_input("p Maks", min_value=1, max_value=10, value=5)
         K_range = range(2, 6)
-        max_iter = st.sidebar.slider("Maks Iterasi EM", 50)
+        max_iter = st.sidebar.slider("Maks Iterasi EM", min_value=50, max_value=500, value=100, step=10)
 
         if st.button("🔍 Cari p & K Terbaik"):
-            with st.spinner("Menjalankan pencarian grid..."):
+            with st.spinner("Menjalankan pencarian grid MAR-GED..."):
                 best_bic = np.inf
                 best_model = None
+                best_p = None
+                summary_list = []
+
                 for p in range(1, p_max+1):
                     try:
                         model, summary = find_best_K_mar_ged(series, p=p, K_range=K_range, max_iter=max_iter)
+                        summary['p'] = p
+                        summary_list.append(summary)
+
                         if model['BIC'] < best_bic:
                             best_bic = model['BIC']
                             best_model = model
                             best_p = p
                     except Exception as e:
-                        continue
+                        st.warning(f"Gagal untuk p={p}: {e}")
 
                 if best_model:
                     st.session_state['mar_ged_model'] = best_model
                     st.session_state['mar_ged_p'] = best_p
                     st.session_state['mar_ged_K'] = best_model['K']
+
+                    # Sinkronisasi dengan halaman lain
+                    st.session_state['best_model'] = best_model
+                    st.session_state['model_choice'] = "MAR-GED"
+
                     st.success(f"Model terbaik ditemukan: p={best_p}, K={best_model['K']}, BIC={best_model['BIC']:.2f}")
-                    show_mar_ged_params(best_model)
+
+                    with st.expander("📊 Lihat Parameter Model"):
+                        st.write("**Phi (Koefisien AR):**")
+                        st.write(pd.DataFrame(best_model['phi'], columns=[f"Lag {i+1}" for i in range(best_model['phi'].shape[1])]))
+
+                        st.write("**Sigma:**", best_model['sigma'])
+                        st.write("**Beta (GED Shape):**", best_model['beta'])
+                        st.write("**Pi (Proporsi Komponen):**", best_model['pi'])
+                        st.write(f"**Log-Likelihood:** {best_model['loglik']:.4f}")
+                        st.write(f"**AIC:** {best_model['AIC']:.4f}")
+                        st.write(f"**BIC:** {best_model['BIC']:.4f}")
+
+                    # Tampilkan tabel BIC untuk semua p dan K
+                    if len(summary_list) > 0:
+                        summary_all = pd.concat(summary_list, ignore_index=True)
+                        st.write("### 📈 Ringkasan BIC Grid Search")
+                        st.dataframe(summary_all.pivot(index='K', columns='p', values='BIC').style.format("{:.2f}"))
                 else:
                     st.error("Gagal menemukan model yang konvergen.")
 
