@@ -305,7 +305,7 @@ elif menu == "Model":
 
         if st.button("🚀 Jalankan Estimasi MAR‑GED"):
             with st.spinner("Menjalankan estimasi EM MAR-GED..."):
-                model = em_mar_ged_manual(series, p=p, K=K, max_iter=max_iter)
+                model = em_mar_ged(series, p=p, K=K, max_iter=max_iter)
 
                 # Simpan ke session state
                 st.session_state['mar_ged_model'] = model
