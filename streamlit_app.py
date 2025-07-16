@@ -333,7 +333,7 @@ elif menu == "Model":
 
     if mode == "Manual":
         p = st.sidebar.number_input("Ordo AR (p)", min_value=1, max_value=10, value=2)
-        K = st.sidebar.number_input("Jumlah Komponen (K)", min_value=2, max_value=6, value=2)
+        K = st.sidebar.number_input("Jumlah Komponen (K)", min_value=1, max_value=6, value=2)
         max_iter = st.sidebar.slider("Maks Iterasi EM", min_value=50, max_value=500, value=100, step=10)
 
         if st.button("🚀 Jalankan Estimasi MAR‑GED"):
