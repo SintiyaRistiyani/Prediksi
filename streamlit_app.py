@@ -230,7 +230,7 @@ elif menu == "Data Preprocessing":
     df['Harga Format Rupiah'] = df['Harga Angka'].apply(format_harga_idr)
 
     # Hitung Log Return
-    df['Log Return'] = np.log(df['Harga Angka'] / df['Harga Angka'].shift(1))
+    df['Log Return'] = np.abs(np.log(df['Harga Angka'] / df['Harga Angka'].shift(1)))
     df = df.dropna().reset_index(drop=True)
 
     # Split Train/Test
