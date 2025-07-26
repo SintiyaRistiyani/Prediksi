@@ -603,26 +603,42 @@ elif menu == "Interpretasi dan Saran":
 
     model = st.session_state['best_model']
     model_choice = st.session_state['model_choice']
-    p = st.session_state.get('best_p', 1)
-    K = st.session_state.get('mar_ged_k', model['K'])
+
+    # Validasi dan ekstraksi dimensi phi
+    phi_array = model.get('phi', None)
+    if phi_array is None or not hasattr(phi_array, 'shape'):
+        st.error("❌ Model tidak mengandung parameter 'phi' yang valid.")
+        st.stop()
+
+    K = phi_array.shape[0]
+    p = phi_array.shape[1] if len(phi_array.shape) == 2 else 1
 
     st.markdown(f"### Model Terpilih: {model_choice} dengan K={K} komponen dan orde AR(p)={p}")
 
     # Tampilkan parameter phi per komponen
     st.subheader("Parameter AR (phi) per Komponen")
-    phi_df = pd.DataFrame(model['phi'], columns=[f'phi_{i+1}' for i in range(p)])
-    phi_df.index = [f'Komponen {k+1}' for k in range(K)]
-    st.dataframe(phi_df.round(4))
+    try:
+        phi_df = pd.DataFrame(phi_array, columns=[f'phi_{i+1}' for i in range(p)])
+        phi_df.index = [f'Komponen {k+1}' for k in range(K)]
+        st.dataframe(phi_df.round(4))
+    except Exception as e:
+        st.error(f"Gagal menampilkan parameter phi: {e}")
+        st.stop()
 
-    # Tampilkan parameter sigma dan pi
+    # Tampilkan parameter sigma, pi, dan beta jika ada
     st.subheader("Parameter Varians (sigma) dan Proporsi Komponen (pi)")
-    params_df = pd.DataFrame({
-        'sigma': model['sigma'],
-        'pi': model['pi']
-    }, index=[f'Komponen {k+1}' for k in range(K)])
-    if model_choice == "MAR-GED":
-        params_df['beta'] = model['beta']
-    st.dataframe(params_df.round(4))
+    try:
+        params_df = pd.DataFrame({
+            'sigma': model['sigma'],
+            'pi': model['pi']
+        }, index=[f'Komponen {k+1}' for k in range(K)])
+
+        if model_choice == "MAR-GED" and 'beta' in model:
+            params_df['beta'] = model['beta']
+
+        st.dataframe(params_df.round(4))
+    except Exception as e:
+        st.error(f"Gagal menampilkan parameter sigma/pi/beta: {e}")
 
     # Interpretasi sederhana
     st.markdown("### Interpretasi Singkat")
@@ -631,45 +647,36 @@ elif menu == "Interpretasi dan Saran":
     - **Sigma** menggambarkan volatilitas/residual standar pada komponen tersebut.
     - **Pi** adalah proporsi kontribusi setiap komponen dalam campuran.
     """)
-
     if model_choice == "MAR-GED":
-        st.markdown("- **Beta** pada GED mengatur ketebalan ekor distribusi, nilai beta < 2 menunjukkan ekor yang lebih berat dibanding normal.")
+        st.markdown("- **Beta** pada GED mengatur ketebalan ekor distribusi. Nilai beta < 2 → heavy-tailed.")
 
     # Saran penggunaan model
     st.subheader("Saran Penggunaan Model")
     st.markdown("""
-    - Gunakan model ini untuk memprediksi harga saham dengan mempertimbangkan adanya campuran beberapa proses autoregresif yang berbeda.
-    - Jika model MAR-GED dipilih, model ini cocok untuk data dengan distribusi heavy-tailed atau outlier.
-    - Selalu cek asumsi residual dan lakukan validasi model untuk memastikan performa prediksi yang baik.
+    - Gunakan model ini untuk memprediksi harga saham dengan mempertimbangkan adanya campuran proses autoregresif.
+    - Cocok untuk data saham yang memiliki **volatilitas tinggi dan distribusi tidak normal (heavy tails)**.
+    - Periksa asumsi residual dan validasi model secara berkala untuk menjaga akurasi.
     """)
 
-    # Tombol untuk simpan hasil interpretasi sebagai file txt (optional)
+    # Simpan interpretasi ke file .txt
     if st.button("💾 Simpan Interpretasi ke File"):
         interpretasi_text = f"""
-        Model Terpilih: {model_choice} dengan K={K} komponen dan orde AR(p)={p}\n
-        Parameter AR (phi):\n{phi_df.round(4).to_string()}\n
-        Parameter Sigma dan Pi:\n{params_df.round(4).to_string()}\n
-        """
-        if model_choice == "MAR-GED":
-            interpretasi_text += f"Beta:\n{params_df['beta'].round(4).to_string()}\n"
+Model Terpilih: {model_choice} dengan K={K} komponen dan orde AR(p)={p}\n
+Parameter AR (phi):\n{phi_df.round(4).to_string()}\n
+Parameter Sigma dan Pi:\n{params_df.round(4).to_string()}\n
+Interpretasi:
+- Parameter AR (phi) menunjukkan kekuatan hubungan lag pada masing-masing komponen.
+- Sigma menggambarkan volatilitas pada masing-masing komponen.
+- Pi menunjukkan proporsi dominasi masing-masing komponen dalam model.
+"""
+        if 'beta' in model:
+            interpretasi_text += "- Beta pada GED menunjukkan ketebalan ekor distribusi. Beta < 2 artinya heavy-tail.\n"
 
         interpretasi_text += """
-        Interpretasi:
-        - Parameter AR (phi) menunjukkan kekuatan hubungan lag pada masing-masing komponen model.
-        - Sigma menggambarkan volatilitas/residual standar pada komponen tersebut.
-        - Pi adalah proporsi kontribusi setiap komponen dalam campuran.
-        """
-
-        if model_choice == "MAR-GED":
-            interpretasi_text += "- Beta pada GED mengatur ketebalan ekor distribusi, nilai beta < 2 menunjukkan ekor yang lebih berat dibanding normal.\n"
-
-        interpretasi_text += """
-        Saran:
-        - Gunakan model ini untuk prediksi harga saham dengan campuran beberapa proses autoregresif.
-        - Cek asumsi residual dan validasi model secara berkala.
-        """
-
+Saran:
+- Gunakan model ini untuk prediksi saham berbasis proses autoregresif campuran.
+- Validasi performa model dan cek residual secara berkala.
+"""
         with open("interpretasi_saran.txt", "w") as f:
             f.write(interpretasi_text)
-
-        st.success("✅ File interpretasi_saran.txt berhasil disimpan di direktori aplikasi.")
+        st.success("✅ File interpretasi_saran.txt berhasil disimpan.")
